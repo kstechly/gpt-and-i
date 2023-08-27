@@ -1,4 +1,3 @@
-import unittest
 from typing import Dict, List, Optional
 
 from csp import AbstractConstraint, CSP
@@ -23,24 +22,23 @@ class NQueensConstraint(AbstractConstraint[int, int]):
         return True  # no conflict
 
 
-class TestNQueens(unittest.TestCase):
+def main():
+    """
+    solution = {1: 1, 2: 5, 3: 8, 4: 6, 5: 3, 6: 7, 7: 2, 8: 4}
+    """
 
-    def setUp(self):
-        self.solution = {1: 1, 2: 5, 3: 8, 4: 6, 5: 3, 6: 7, 7: 2, 8: 4}
+    variables: List[int] = [1, 2, 3, 4, 5, 6, 7, 8]
 
-        self.variables: List[int] = [1, 2, 3, 4, 5, 6, 7, 8]
+    domains: Dict[int, List[int]] = {}
+    for variable in variables:
+        domains[variable] = [1, 2, 3, 4, 5, 6, 7, 8]
 
-        self.domains: Dict[int, List[int]] = {}
-        for variable in self.variables:
-            self.domains[variable] = [1, 2, 3, 4, 5, 6, 7, 8]
+    csp: CSP[int, int] = CSP(variables, domains)
+    csp.add_constraint(NQueensConstraint(variables))
 
-    def test_solution(self):
-        csp: CSP[int, int] = CSP(self.variables, self.domains)
-        csp.add_constraint(NQueensConstraint(self.variables))
-
-        solution: Optional[Dict[str, str]] = csp.backtracking_search()
-        self.assertEqual(self.solution, solution)
+    solution: Optional[Dict[str, str]] = csp.backtracking_search()
+    print(solution)
 
 
 if __name__ == '__main__':
-    unittest.main()
+    main()

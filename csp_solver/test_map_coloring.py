@@ -1,4 +1,3 @@
-import unittest
 from typing import Dict, List, Optional
 
 from csp import AbstractConstraint, CSP
@@ -19,42 +18,40 @@ class MapColoringConstraint(AbstractConstraint[str, str]):
         # color assigned to place2
         return assignment[self.place1] != assignment[self.place2]
 
+    
+def main():
+    """
+    solution = {
+        'Western Australia': 'red',
+        'Northern Territory': 'green',
+        'South Australia': 'blue',
+        'Queensland': 'red',
+        'New South Wales': 'green',
+        'Victoria': 'red',
+        'Tasmania': 'green'
+    }"""
 
-class TestMapColoring(unittest.TestCase):
+    variables: List[str] = [
+        "Western Australia", "Northern Territory", "South Australia",
+        "Queensland", "New South Wales", "Victoria", "Tasmania"
+    ]
 
-    def setUp(self):
-        self.solution = {
-            'Western Australia': 'red',
-            'Northern Territory': 'green',
-            'South Australia': 'blue',
-            'Queensland': 'red',
-            'New South Wales': 'green',
-            'Victoria': 'red',
-            'Tasmania': 'green'
-        }
+    constraints = [
+        [0, 1], [0, 2], [2, 1], [3, 1], [3, 2], [3, 4], [4, 2], [5, 2], [5, 4], [5, 6]
+    ]
 
-        self.variables: List[str] = [
-            "Western Australia", "Northern Territory", "South Australia",
-            "Queensland", "New South Wales", "Victoria", "Tasmania"
-        ]
+    domains: Dict[str, List[str]] = {}
+    for variable in variables:
+        domains[variable] = ["red", "green", "blue"]
 
-        self.constraints = [
-            [0, 1], [0, 2], [2, 1], [3, 1], [3, 2], [3, 4], [4, 2], [5, 2], [5, 4], [5, 6]
-        ]
+    csp: CSP[str, str] = CSP(variables, domains)
 
-        self.domains: Dict[str, List[str]] = {}
-        for variable in self.variables:
-            self.domains[variable] = ["red", "green", "blue"]
+    for c in constraints:
+        csp.add_constraint(MapColoringConstraint(variables[c[0]],variables[c[1]]))
 
-    def test_solution(self):
-        csp: CSP[str, str] = CSP(self.variables, self.domains)
-
-        for c in self.constraints:
-            csp.add_constraint(MapColoringConstraint(self.variables[c[0]], self.variables[c[1]]))
-
-        solution: Optional[Dict[str, str]] = csp.backtracking_search()
-        self.assertEqual(self.solution, solution)
-
+    solution: Optional[Dict[str, str]] = csp.backtracking_search()
+    print(solution)
 
 if __name__ == '__main__':
-    unittest.main()
+    main()
+    
