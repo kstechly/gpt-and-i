@@ -11,6 +11,9 @@ import time
 from transformers import AutoTokenizer, AutoModelForCausalLM, AutoModel
 import json
 
+from csp_solver.csp import *
+from csp_solver.test_map_coloring import *
+from csp_solver.test_n_queens import *
 
 class BackPrompter():
 
@@ -38,31 +41,15 @@ class BackPrompter():
         
 
     # ========================================== UTILS ========================================== #
-    def compute_plan(self, domain, instance, timeout=30):
-        fast_downward_path = os.getenv("FAST_DOWNWARD")
-        # Remove > /dev/null to see the output of fast-downward
-        assert os.path.exists(f"{fast_downward_path}/fast-downward.py")
-        cmd = f"timeout {timeout}s {fast_downward_path}/fast-downward.py {domain} {instance} --search \"astar(lmcut())\" > /dev/null 2>&1"
-        os.system(cmd)
-
-        if not os.path.exists(self.plan_file):
-            return ""
-        return Path(self.plan_file).read_text()
         
-    
-
-    def read_config(self, config_file):
-        with open(config_file, 'r') as file:
-            self.data = yaml.safe_load(file)
-
-    def get_problem(self, instance, domain):
-        reader = PDDLReader(raise_on_error=True)
-        reader.parse_domain(domain)
-        return reader.parse_instance(instance)
-
-    def get_executor(self, instance, domain, ground=True):
-        plan_executor = Executor(domain, instance, ground=ground)
-        return plan_executor
+    def compute_solution(self, problem) -> str:
+        if problem == "map_coloring":
+            solution = map_coloring_solution()
+        elif problem == "n_queens":
+            solution = n_queens_solution()
+        else:
+            raise NotImplementedError
+        return solution
 
     def get_bloom(self):
         max_memory_mapping = {0: "0GB", 1: "43GB", 2: "43GB", 3: "43GB", 4: "43GB", 5: "43GB"}
@@ -71,7 +58,6 @@ class BackPrompter():
                                                      local_files_only=False, load_in_8bit=True, device_map='auto',
                                                      max_memory=max_memory_mapping)
         return {'model': model, 'tokenizer': tokenizer}
-
 
     def save_json(self, output_file, structured_output):
         os.makedirs(f"results/{self.data['domain_name']}/{self.engine}/json/", exist_ok=True)
@@ -85,28 +71,15 @@ class BackPrompter():
         else:
             return None
 
+    def solving_csp_backprompting(self):
     
-
-    def task_1_plan_generation_backprompting(self, config_file, specified_instances=[], random_example=False):
-        
-        
-        self.read_config(config_file)
-        task_name = "task_1_plan_generation_backprompting"
-        instance_dir = self.data['instance_dir']
-        domain_pddl = f'./instances/{self.data["domain_file"]}'
-        instance_folder = f'./instances/{instance_dir}/'
-        instance = f'./instances/{instance_dir}/{self.data["instances_template"]}'
-        n_files = min(self.data['n_instances'], len(os.listdir(instance_folder)))
-
-        i_start = self.data['start']
-        i_end = self.data['end']
-        n_files = i_end - i_start + 1  # min(self.data['n_instances'], len(os.listdir(instance_folder)))
+        task_name = "solving_csp_with_backprompting"
         final_output = ""
         instance_structured_outputs = []
         correct_plans = 0
-
         failed_instances = []
         structured_output = self.load_json(task_name)
+        
         if structured_output is None:
             structured_output = {
                                 "task": task_name,
@@ -116,95 +89,82 @@ class BackPrompter():
                                 "instances": instance_structured_outputs,
                                 }
         completed_instances =  []
-        for inst in structured_output["instances"]:
-            if not inst["could_not_extract"]:
-                completed_instances.append(inst["instance_id"])
+    
+        query = self.data["domain_intro"]
+        instance_structured_output = {}
+        examples = []
+        for i in range(start, start + self.n_examples+1):
+            last_plan = True if i == start + self.n_examples else False
+            get_plan = not last_plan
+            if last_plan:
+                cur_instance = instance.format(i)
             else:
-                if [msg["content"] for msg in inst["messages"] if msg["role"] == "assistant"][-1]:
-                    completed_instances.append(inst["instance_id"])
-        if len(specified_instances):
-            range_list = []
-            for specified_instance in specified_instances:
-                range_list.append(specified_instance - self.n_examples)
-        else:
-            range_list = range(i_start, i_end + 2 - self.n_examples)
-        
-        for ind, start in enumerate(range_list):
-            query = self.data["domain_intro"]
-            instance_structured_output = {}
-            examples = []
-            for i in range(start, start + self.n_examples+1):
-                last_plan = True if i == start + self.n_examples else False
-                get_plan = not last_plan
-                if last_plan:
+                if random_example:
+                    new_i = random.choice([ln for ln in range(1,self.n_files) if ln != i])
+                    cur_instance = instance.format(new_i)
+                    examples.append(new_i)
+                else:
                     cur_instance = instance.format(i)
-                else:
-                    if random_example:
-                        new_i = random.choice([ln for ln in range(1,self.n_files) if ln != i])
-                        cur_instance = instance.format(new_i)
-                        examples.append(new_i)
-                    else:
-                        cur_instance = instance.format(i)
+            
+            # --------------- Add to final output --------------- #
+            final_output += f"\n Instance {cur_instance}\n"
+            if self.verbose:
+                print(f"Instance {cur_instance}")
+            # if 'logistics' in self.data['domain_name']:
+            #     plan_executor = self.get_executor(cur_instance, domain_pddl, ground=False)
+            # else:
+            #     plan_executor = self.get_executor(cur_instance, domain_pddl)
+            # # --------------- Read Instance --------------- #
+            problem = self.get_problem(cur_instance, domain_pddl)
+            # # --------------------------------------------- #
+            # # ------------ Put plan and instance into text ------------ #
+            gt_plan = self.compute_plan(domain_pddl, cur_instance)
+            plan = get_plan_as_text(self.data)
+            # query += fill_template(*instance_to_text(problem, get_plan, self.data))
+            # instance_text, _ = generate_plan_cot(plan_executor, self.data, get_plan)
+            # # query_inst, _ = generate_plan_subset_cot(plan_executor, self.data, False)
+            # query += instance_text
+            # query += query_inst
+            query += fill_template(*instance_to_text(problem, get_plan, self.data))
+            
+            if get_plan:
+                examples.append(i)
+            else:
+                # Store instance id for the actual instance LLM is asked to solve
+                instance_structured_output["instance_id"] = i
                 
-                # --------------- Add to final output --------------- #
-                final_output += f"\n Instance {cur_instance}\n"
-                if self.verbose:
-                    print(f"Instance {cur_instance}")
-                # if 'logistics' in self.data['domain_name']:
-                #     plan_executor = self.get_executor(cur_instance, domain_pddl, ground=False)
-                # else:
-                #     plan_executor = self.get_executor(cur_instance, domain_pddl)
-                # # --------------- Read Instance --------------- #
-                problem = self.get_problem(cur_instance, domain_pddl)
-                # # --------------------------------------------- #
-                # # ------------ Put plan and instance into text ------------ #
-                gt_plan = self.compute_plan(domain_pddl, cur_instance)
-                plan = get_plan_as_text(self.data)
-                # query += fill_template(*instance_to_text(problem, get_plan, self.data))
-                # instance_text, _ = generate_plan_cot(plan_executor, self.data, get_plan)
-                # # query_inst, _ = generate_plan_subset_cot(plan_executor, self.data, False)
-                # query += instance_text
-                # query += query_inst
-                query += fill_template(*instance_to_text(problem, get_plan, self.data))
-                
-                if get_plan:
-                    examples.append(i)
-                else:
-                    # Store instance id for the actual instance LLM is asked to solve
-                    instance_structured_output["instance_id"] = i
-                    
-                # stop_statement = '[STATEMENT]'
-            
-            instance_structured_output["example_instance_ids"] = examples
-            # print(query)
-            # llm_response = ""
-            if instance_structured_output["instance_id"] in completed_instances:
-                print(f"Instance {instance_structured_output['instance_id']} already completed")
-                continue
-            # if self.is_already_correct(instance_structured_output["instance_id"]):
-            #     print(f"Instance {instance_structured_output['instance_id']} already completed and correct")
-            #     continue
-            
-            
+            # stop_statement = '[STATEMENT]'
+        
+        instance_structured_output["example_instance_ids"] = examples
+        # print(query)
+        # llm_response = ""
+        if instance_structured_output["instance_id"] in completed_instances:
+            print(f"Instance {instance_structured_output['instance_id']} already completed")
+            continue
+        # if self.is_already_correct(instance_structured_output["instance_id"]):
+        #     print(f"Instance {instance_structured_output['instance_id']} already completed and correct")
+        #     continue
+        
+        
 
-            # print(f"Sending query to LLM: Instance {instance_structured_output['instance_id']}")
-            # llm_response = send_query(query, self.engine, self.max_gpt_response_length, model=self.model, stop=stop_statement)
-            # if llm_response == "":
-            #     failed_instances.append(instance_structured_output["instance_id"])
-            #     continue
-            # print("Got LLM response")
-            messages, llm_plan, correct, steps, context_window_hit, could_not_extract = \
-                self.get_repeated_verification(self.engine, query, domain_pddl, problem, cur_instance)
-            instance_structured_output["messages"] = messages
-            instance_structured_output["steps"] = steps
-            instance_structured_output["correct"] = bool(correct)
-            instance_structured_output["extracted_llm_plan"] = llm_plan
-            instance_structured_output["context_window_hit"] = bool(context_window_hit)
-            instance_structured_output["could_not_extract"] = bool(could_not_extract)
+        # print(f"Sending query to LLM: Instance {instance_structured_output['instance_id']}")
+        # llm_response = send_query(query, self.engine, self.max_gpt_response_length, model=self.model, stop=stop_statement)
+        # if llm_response == "":
+        #     failed_instances.append(instance_structured_output["instance_id"])
+        #     continue
+        # print("Got LLM response")
+        messages, llm_plan, correct, steps, context_window_hit, could_not_extract = \
+            self.get_repeated_verification(self.engine, query, domain_pddl, problem, cur_instance)
+        instance_structured_output["messages"] = messages
+        instance_structured_output["steps"] = steps
+        instance_structured_output["correct"] = bool(correct)
+        instance_structured_output["extracted_llm_plan"] = llm_plan
+        instance_structured_output["context_window_hit"] = bool(context_window_hit)
+        instance_structured_output["could_not_extract"] = bool(could_not_extract)
 
-            structured_output["instances"].append(instance_structured_output)
-            self.save_json(task_name, structured_output)
-            
+        structured_output["instances"].append(instance_structured_output)
+        self.save_json(task_name, structured_output)
+        
         try:
             os.remove(self.plan_file)
             os.remove(self.gpt3_plan_file)

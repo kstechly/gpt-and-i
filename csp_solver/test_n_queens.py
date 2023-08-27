@@ -22,7 +22,7 @@ class NQueensConstraint(AbstractConstraint[int, int]):
         return True  # no conflict
 
 
-def main():
+def n_queens_solution():
     """
     solution = {1: 1, 2: 5, 3: 8, 4: 6, 5: 3, 6: 7, 7: 2, 8: 4}
     """
@@ -37,8 +37,7 @@ def main():
     csp.add_constraint(NQueensConstraint(variables))
 
     solution: Optional[Dict[str, str]] = csp.backtracking_search()
-    print(solution)
-
+    return solution
 
 if __name__ == '__main__':
-    main()
+    print(n_queens_solution())

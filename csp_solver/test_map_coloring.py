@@ -19,7 +19,7 @@ class MapColoringConstraint(AbstractConstraint[str, str]):
         return assignment[self.place1] != assignment[self.place2]
 
     
-def main():
+def map_coloring_solution():
     """
     solution = {
         'Western Australia': 'red',
@@ -50,8 +50,8 @@ def main():
         csp.add_constraint(MapColoringConstraint(variables[c[0]],variables[c[1]]))
 
     solution: Optional[Dict[str, str]] = csp.backtracking_search()
-    print(solution)
+    return solution
 
 if __name__ == '__main__':
-    main()
+    print(map_coloring_solution())
     
