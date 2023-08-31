@@ -1,1 +1,1 @@
-pysat==3.1.0
+python_sat==0.1.8.dev9
