@@ -63,8 +63,6 @@ def evaluate_plan(engine, specified_instances=[], ignore_existing=False, verbose
         if missing == True:
             evaluations[instance] = False
             continue
-        
-        #TODO filter out duplicate literals
 
         #use solver to check 
         solver = Solver(bootstrap_with=cnf.clauses)
