@@ -66,9 +66,7 @@ def evaluate_plan(engine, specified_instances=[], ignore_existing=False, verbose
 
         #use solver to check 
         solver = Solver(bootstrap_with=cnf.clauses)
-        if solver.solve(assumptions=var_assignments):
-                evaluations[instance] = True
-        else: evaluations[instance] = False
+        evaluations[instance] = solver.solve(assumptions=var_assignments)
 
         if verbose:
             print(f"Correct: {evaluations[instance]}")
