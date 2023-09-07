@@ -36,11 +36,13 @@ def check_coloring(coloring, instance_text):
     # check if coloring is valid
     for edge in edges:
         if coloring[edge[0]] == coloring[edge[1]]:
+            #print(f"{edge[0]}={coloring[edge[0]]} and {edge[1]}={coloring[edge[1]]}")
             return False
     # check if coloring is optimal
-    if optimal_coloring_number(instance_text) == len(set(coloring.values)):
+    if int(optimal_coloring_number(instance_text)) == len(set(coloring.values())):
         return True
-    else: return False
+    else: 
+        return False
 
 #### Required Functions
 
@@ -50,14 +52,21 @@ def file_ending():
 def generate(instance_text):
     prompt = DEFAULT_PROMPT_START
     prompt += f"You may use at most {optimal_coloring_number(instance_text)} colors.\n"
+    vertices = []
+    num_verts = 0
+    min_vert = 1
     for edge in parse_dimacs(instance_text):
         prompt += f"Vertex {edge[0]} is connected to vertex {edge[1]}.\n"
+        num_verts = max(num_verts, int(edge[0]),int(edge[1]))
+        min_vert = min(min_vert, int(edge[0]), int(edge[1]))
+    num_verts += (min_vert+1)%2
+    prompt+=f"There are a total of {num_verts} vertices. Please label every vertex, even if it is disconnected from the rest of the graph."
     prompt += DEFAULT_PROMPT_END
     return prompt  
 
 def evaluate(instance_text,model_response):
     coloring = {}
-    for line in model_response:
+    for line in model_response.split("\n"):
         assignment = line.strip().split(": ")
         vertex_number = assignment[0]
         color = assignment[1]
@@ -65,7 +74,7 @@ def evaluate(instance_text,model_response):
     return check_coloring(coloring, instance_text)
 
 
-#### Precompute script
+#### Precompute and instance generation scripts
 # WARNING: Only works from domain_utils directory
 
 if __name__ == "__main__":

@@ -32,10 +32,9 @@ def get_responses(engine, domain, specified_instances = [], run_till_completion=
                 prev_output = json.load(file)
             if not ignore_existing:
                 output = prev_output
-        else:
-            assert os.path.exists(prompt_dir+"prompts.json")
-            with open(prompt_dir+"prompts.json", 'r') as file:
-                input = json.load(file) 
+        assert os.path.exists(prompt_dir+"prompts.json")
+        with open(prompt_dir+"prompts.json", 'r') as file:
+            input = json.load(file) 
     
         failed_instances = []
         for instance in tqdm(input):
