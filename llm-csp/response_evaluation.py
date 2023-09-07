@@ -75,7 +75,7 @@ def evaluate_plan(engine, domain_name, specified_instances=[], ignore_existing=F
 
 if __name__=="__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--engine', type=str, required=True, help='Engine to use \
+    parser.add_argument('-e', '--engine', type=str, required=True, help='Engine to use \
                         \n gpt-4_chat = GPT-4 \
                         \n gpt-3.5-turbo_chat = GPT-3.5 Turbo \
                         \n davinci = GPT-3 Davinci \
@@ -83,17 +83,17 @@ if __name__=="__main__":
                         \n babbage = GPT-3 Babbage \
                         \n ada = GPT-3 Ada \
                         ')
-    parser.add_argument('--domain', type=str, required=True, help='Problem domain to evaluate within')
-    parser.add_argument('--verbose', type=str, default="False", help='Verbose')
-    parser.add_argument('--specific_instances', nargs='+', type=int, default=[], help='List of instances to run')
-    parser.add_argument('--ignore_existing', action='store_true', help='Ignore existing output')
+    parser.add_argument('-d', '--domain', type=str, required=True, help='Problem domain to evaluate within')
+    parser.add_argument('-v', '--verbose', action='store_true')
+    parser.add_argument('-s', '--specific_instances', nargs='+', type=int, default=[], help='List of instances to run')
+    parser.add_argument('-i', '--ignore_existing', action='store_true', help='Ignore existing output')
     args = parser.parse_args()
     engine = args.engine
     domain_name = args.domain
     if domain_name not in domain_utils.domains:
         raise ValueError(f"Domain name must be an element of {list(domain_utils.domains)}.")
     specified_instances = args.specific_instances
-    verbose = eval(args.verbose)
+    verbose = args.verbose
     ignore_existing = args.ignore_existing
     print(f"Engine: {engine}, Domain: {domain_name}, Verbose: {verbose}")
     evaluate_plan(engine, domain_name, specified_instances, ignore_existing, verbose)
