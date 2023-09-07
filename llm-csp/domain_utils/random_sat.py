@@ -37,19 +37,19 @@ def generate(instance_text):
     return prompt
 
 def evaluate(instance_text, model_response):
-        cnf = CNF(from_string=instance_text)
-        var_assignments = [0 for _ in range(cnf.nv)]
-        for line in model_response.split("\n"):
-            assignment = line.strip().split(": ")
-            var_number = ord(assignment[0]) - ord("@")
-            var_assignments[var_number - 1] = 1 * var_number if assignment[1] == "true" else -1 * var_number
-        missing = False
-        #if missing a var assigment, mark wrong
-        for i, va in enumerate(var_assignments):
-            if va == 0:
-                missing = True
-        if missing == True:
-            return False 
-        #use solver to check 
-        solver = Solver(bootstrap_with=cnf.clauses)
-        return solver.solve(assumptions=var_assignments)
+    cnf = CNF(from_string=instance_text)
+    var_assignments = [0 for _ in range(cnf.nv)]
+    for line in model_response.split("\n"):
+        assignment = line.strip().split(": ")
+        var_number = ord(assignment[0]) - ord("@")
+        var_assignments[var_number - 1] = 1 * var_number if assignment[1] == "true" else -1 * var_number
+    missing = False
+    #if missing a var assigment, mark wrong
+    for i, va in enumerate(var_assignments):
+        if va == 0:
+            missing = True
+    if missing == True:
+        return False 
+    #use solver to check 
+    solver = Solver(bootstrap_with=cnf.clauses)
+    return solver.solve(assumptions=var_assignments)
