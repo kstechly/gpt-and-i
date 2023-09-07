@@ -1,4 +1,3 @@
-from utils import *
 import json
 import os
 import domain_utils

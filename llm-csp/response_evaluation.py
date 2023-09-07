@@ -1,5 +1,4 @@
 import os
-from utils import *
 import argparse
 import json
 from tqdm import tqdm
