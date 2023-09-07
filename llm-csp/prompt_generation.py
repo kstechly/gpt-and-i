@@ -5,6 +5,7 @@ from domain_utils import *
 import argparse
 
 START = 1
+END = 100
 
 def write_json(domain_name,text_to_write):
     os.makedirs(f"prompts/{domain_name}", exist_ok=True)
@@ -20,18 +21,20 @@ def read_instance(domain_name,number_of_instance,file_ending):
 
 if __name__=="__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--end', type=int, default=100, help='Total number of instances to process')
-    parser.add_argument('--domain', type=str, required="True", help='Problem domain to generate for')
+    parser.add_argument('-s','--start', type=int, default=START, help='Start number of instances to process')
+    parser.add_argument('-e','--end', type=int, default=END, help='End number of instances to process')
+    parser.add_argument('-d','--domain', type=str, required="True", help='Problem domain to generate for')
     args = parser.parse_args()
-    end = int(args.end)
+    start = args.start
+    end = args.end
     domain_name = args.domain
     if domain_name not in domain_utils.domains:
         raise ValueError(f"Domain name must be an element of {list(domain_utils.domains)}.")
     domain = domain_utils.domains[domain_name]
 
     prompts = {}
-    for x in range(START-1,end):
-        instance = read_instance(domain_name,x+1,domain.file_ending())
+    for x in range(start,end+1):
+        instance = read_instance(domain_name,x,domain.file_ending())
         if instance:
-            prompts[f"{x+1}"] = domain.generate(instance)
+            prompts[f"{x}"] = domain.generate(instance)
     write_json(domain_name, prompts)
