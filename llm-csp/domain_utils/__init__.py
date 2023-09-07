@@ -9,3 +9,5 @@ domains = {"random_sat":random_sat}
 #       (returns natural language translations of a formal language instance)
 #   3. evaluate: instance_text, model_response -> bool
 #       (returns success/failure of model on an instance)
+#
+# Instance data for the ith instance must be stored in data/{domain_name}/instance-{i}.{file_ending()}
