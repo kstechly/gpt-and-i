@@ -90,6 +90,8 @@ if __name__=="__main__":
     args = parser.parse_args()
     engine = args.engine
     domain_name = args.domain
+    if domain_name not in domain_utils.domains:
+        raise ValueError(f"Domain name must be an element of {list(domain_utils.domains)}.")
     specified_instances = args.specific_instances
     verbose = eval(args.verbose)
     ignore_existing = args.ignore_existing
