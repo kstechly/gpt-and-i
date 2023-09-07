@@ -4,8 +4,14 @@ DEFAULT_PROMPT_END = "Please provide each vertex's color. Each color must be pro
 CHROMATIC_NUMBER_KEY = "OPTIMAL CHROMATIC NUMBER === "
 GRAPH_COLORING_DIRECTORY = "../data/graph_coloring/"
 
-import  grinpy
+INITIAL_NODES = 3
+NEIGHBOR_P = .4
+SOURCE_P = .2
+
+import grinpy
 import os
+import argparse
+import random
 
 def parse_dimacs(instance_text):
     parsed = []
@@ -14,6 +20,12 @@ def parse_dimacs(instance_text):
         if text[0] == "e":
             parsed.append((text[1],text[2]))
     return parsed
+def construct_dimacs(parsed_graph):
+    dimacs = ""
+    for edge in parsed_graph:
+        dimacs+=f"\ne {edge[0]} {edge[1]}"
+    return dimacs
+
 def optimal_coloring_number(instance_text):
     if CHROMATIC_NUMBER_KEY in instance_text:
         return instance_text.split(CHROMATIC_NUMBER_KEY)[1].split("\n")[0]
@@ -57,15 +69,39 @@ def evaluate(instance_text,model_response):
 # WARNING: Only works from domain_utils directory
 
 if __name__ == "__main__":
-    print(f"Precomputing chromatic numbers for all instances in {GRAPH_COLORING_DIRECTORY}")
-    for instance in os.listdir(GRAPH_COLORING_DIRECTORY):
-        if instance.startswith("instance-"):
-            with open(GRAPH_COLORING_DIRECTORY+instance,"r+") as fp:
-                instance_text = fp.read()
-                print(instance_text)
-                if CHROMATIC_NUMBER_KEY in instance_text:
-                    print(f"Instance {instance} was already precomputed. Skipping.")
-                    continue
-                chromatic = optimal_coloring_number(instance_text)
-                print(f"Instance {instance}'s chromatic number is {chromatic}")
-                fp.write(f"\nc {CHROMATIC_NUMBER_KEY}{chromatic}")
+    parser = argparse.ArgumentParser()
+    parser.add_argument('task', help='generate or chromatic'),
+    parser.add_argument('-s','--start', type=int, default=1, help='start index')
+    parser.add_argument('-e', '--end', type=int, default=100, help='end index')
+    parser.add_argument('-t','--total', type=int, default=10, help='total number of nodes')
+    args = parser.parse_args()
+    task = args.task
+    start = args.start
+    end = args.end
+    total_nodes = args.total
+    if task == "chromatic":
+        print(f"Precomputing chromatic numbers for all instances in {GRAPH_COLORING_DIRECTORY}")
+        for instance in os.listdir(GRAPH_COLORING_DIRECTORY):
+            if instance.startswith("instance-"):
+                with open(GRAPH_COLORING_DIRECTORY+instance,"r+") as fp:
+                    instance_text = fp.read()
+                    print(instance_text)
+                    if CHROMATIC_NUMBER_KEY in instance_text:
+                        print(f"Instance {instance} was already precomputed. Skipping.")
+                        continue
+                    chromatic = optimal_coloring_number(instance_text)
+                    print(f"Instance {instance}'s chromatic number is {chromatic}")
+                    fp.write(f"\nc {CHROMATIC_NUMBER_KEY}{chromatic}")
+    elif task == "generate":
+        print(f"Generating new instances from {start} to {end} in {GRAPH_COLORING_DIRECTORY}")
+        for x in range(start, end+1):
+            destination = f"{GRAPH_COLORING_DIRECTORY}instance-{x}.col"
+            dimacs = ""
+            seed = random.random()
+            # TODO decide on the random graph generation procedure
+            graph = grinpy.to_edgelist(grinpy.partial_duplication_graph(total_nodes, INITIAL_NODES, NEIGHBOR_P, SOURCE_P))
+            dimacs = construct_dimacs(graph)
+            dimacs += f"\nc {CHROMATIC_NUMBER_KEY}{optimal_coloring_number(dimacs)}"
+            with open(destination, "w") as fp:
+                fp.write(dimacs)
+            print(dimacs)
