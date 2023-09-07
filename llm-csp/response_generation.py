@@ -9,8 +9,9 @@ import openai
 
 MAX_GPT_RESPONSE_LENGTH = 500
 
-def get_responses(engine, specified_instances = [], run_till_completion=False, ignore_existing=False, verbose=False):
-    output_dir = f"responses/{engine}/"
+def get_responses(engine, domain, specified_instances = [], run_till_completion=False, ignore_existing=False, verbose=False):
+    prompt_dir = f"prompts/{domain}/"
+    output_dir = f"responses/{domain}/{engine}/"
     os.makedirs(output_dir, exist_ok=True)
     output_json = output_dir+"responses.json"
 
@@ -33,7 +34,6 @@ def get_responses(engine, specified_instances = [], run_till_completion=False, i
             if not ignore_existing:
                 output = prev_output
         else:
-            prompt_dir = "prompts/"
             assert os.path.exists(prompt_dir+"prompts.json")
             with open(prompt_dir+"prompts.json", 'r') as file:
                 input = json.load(file) 
@@ -101,7 +101,7 @@ def send_query(query, engine, max_tokens, model=None, stop_statement="[STATEMENT
         eng = engine.split('_')[0]
         # print('chatmodels', eng)
         messages=[
-        {"role": "system", "content": "You are a SAT solver that solves satisfiability problems."},
+        {"role": "system", "content": "You are a constraint satisfaction solver that solves various CSP problems."},
         {"role": "user", "content": query}
         ]
         try:
@@ -139,16 +139,18 @@ if __name__=="__main__":
                         \n babbage = GPT-3 Babbage \
                         \n ada = GPT-3 Ada \
                         ')
+    parser.add_argument('--domain', type=str, required=True, help='Problem domain to query for')
     parser.add_argument('--verbose', type=str, default="False", help='Verbose')
     parser.add_argument('--run_till_completion', type=str, default="False", help='Run till completion')
     parser.add_argument('--specific_instances', nargs='+', type=int, default=[], help='List of instances to run')
     parser.add_argument('--ignore_existing', action='store_true', help='Ignore existing output')
     args = parser.parse_args()
     engine = args.engine
+    domain = args.domain
     specified_instances = args.specific_instances
     verbose = eval(args.verbose)
     run_till_completion = eval(args.run_till_completion)
     ignore_existing = args.ignore_existing
-    print(f"Engine: {engine}, Verbose: {verbose}, Run till completion: {run_till_completion}")
-    get_responses(engine, specified_instances, run_till_completion, ignore_existing, verbose)
+    print(f"Engine: {engine}, Domain: {domain}, Verbose: {verbose}, Run till completion: {run_till_completion}")
+    get_responses(engine, domain, specified_instances, run_till_completion, ignore_existing, verbose)
 

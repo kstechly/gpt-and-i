@@ -1,46 +1,38 @@
 from utils import *
 import json
 import os
+import domain_utils
+from domain_utils import *
+import argparse
 
 START = 1
-END = 1
-DEFAULT_PROMPT_START = "You are tasked with solving a boolean satisfiability problem. Given a list of requirements, you must provide a list of variable assignments that satisfies the requirements."
-DEFAULT_PROMPT_MID = "You must satisfy ALL of the following requirements:"
-DEFAULT_PROMPT_END = "If there is no assignment that satisfies the requirements, say \"Not satisfiable\". If there is an assignment that satisfies the requirements, please provide all variables assignments. Each assignment must be provided on a new line in the response and should be formatted as \"{VARIABLE LETTER}: {\"true\" if true \"false\" otherwise}\". Please do not provide anything else in your response."
 
-from pysat.formula import CNF
-from pysat.solvers import Solver
+def write_json(domain_name,text_to_write):
+    os.makedirs(f"prompts/{domain_name}", exist_ok=True)
+    with open(f"prompts/{domain_name}/prompts.json","w") as fp:
+        json.dump(text_to_write, fp, indent = 4)
 
-def cnf_to_text(cnf_location):
-    cnf = CNF(cnf_location)
-    cumulative_requirement_text = ""
-
-    for i, clause in enumerate(cnf.clauses):
-        single_requirement_text = f"Requirement {i + 1}: "
-        is_first = True
-        for var in clause:
-            letter_var = chr(ord('@')+abs(var))
-            var_req = "true" if var > 0 else "false"
-            if not is_first:
-                single_requirement_text += ", or "
-            is_first = False
-            single_requirement_text += f"{letter_var} must be {var_req}"
-        cumulative_requirement_text += single_requirement_text + "\n"
-
-    return cumulative_requirement_text
+def read_instance(domain_name,number_of_instance,file_ending):
+    try:
+        with open(f"data/{domain_name}/instance-{number_of_instance}{file_ending}") as fp:
+            return fp.read()
+    except FileNotFoundError:
+        print(f"data/{domain_name}/instance-{number_of_instance} not found.")
 
 if __name__=="__main__":
-    prompts = {}
-    for x in range(START-1,END):
-        prompt = DEFAULT_PROMPT_START
-        cnf = CNF(f"data/instance-{x+1}.cnf")
-        prompt += f"There are {cnf.nv} variables, A-{chr(ord('@')+cnf.nv)}."
-        prompt += "\n" + DEFAULT_PROMPT_MID
-        prompt += "\n" + cnf_to_text(f"data/instance-{x+1}.cnf")
-        prompt += "\n" + DEFAULT_PROMPT_END
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--end', type=int, default=100, help='Total number of instances to process')
+    parser.add_argument('--domain', type=str, required="True", help='Problem domain to generate for')
+    args = parser.parse_args()
+    end = int(args.end)
+    domain_name = args.domain
+    if domain_name not in domain_utils.domains:
+        raise ValueError(f"Domain name must be an element of {list(domain_utils.domains)}.")
+    domain = domain_utils.domains[domain_name]
 
-        prompts[f"{x+1}"] = prompt
-    
-    os.makedirs("prompts", exist_ok=True)
-    with open("prompts/prompts.json", "w") as f:
-        json.dump(prompts, f, indent = 4)
+    prompts = {}
+    for x in range(START-1,end):
+        instance = read_instance(domain_name,x+1,domain.file_ending())
+        if instance:
+            prompts[f"{x+1}"] = domain.generate(instance)
+    write_json(domain_name, prompts)

@@ -5,25 +5,31 @@ import json
 from tqdm import tqdm
 from pysat.formula import CNF
 from pysat.solvers import Solver
+import domain_utils
+from domain_utils import *
 
+def evaluate_plan(engine, domain_name, specified_instances=[], ignore_existing=False, verbose=False):
+    instances_dir = f"data/{domain_name}/"
+    outputs_dir = f"responses/{domain_name}/{engine}/"
+    evals_dir = f"evaluations/{domain_name}/{engine}/"
+    outputs_json = outputs_dir+"responses.json"
+    evals_json = evals_dir+"evaluations.json"
 
+    domain = domain_utils.domains[domain_name]
 
-def evaluate_plan(engine, specified_instances=[], ignore_existing=False, verbose=False):
-    output_dir = f"responses/{engine}/"
-    output_json = output_dir+"responses.json"
-    if os.path.exists(output_json):
-            with open(output_json, 'r') as file:
+    if os.path.exists(outputs_json):
+            with open(outputs_json, 'r') as file:
                 output = json.load(file)
     else:
-        print(f"No response data found in {output_dir}")
+        print(f"No response data found in {outputs_dir}")
         return None
-    evals_dir = f"evaluations/{engine}/"
-    evals_json = evals_dir+"evaluations.json"
+    
     prev_evals = {}
+    os.makedirs(evals_dir, exist_ok=True)
     if os.path.exists(evals_json):
             with open(evals_json, 'r') as file:
                 prev_evals = json.load(file)
-    os.makedirs(evals_dir, exist_ok=True)
+
     total_correct = 0
     total_instances = 0
     evaluations = {}
@@ -41,32 +47,19 @@ def evaluate_plan(engine, specified_instances=[], ignore_existing=False, verbose
                 continue
             else:
                 specified_instances.remove(instance)     
-
-        cnf_location = f"data/instance-{instance}.cnf"
+        
         if verbose:
             print(f"Evaluting instance {instance}")
 
-        #text to variable assignments
-        llm_response = output[instance].split("\n")
-        cnf = CNF(cnf_location)
-        var_assignments = [0 for _ in range(cnf.nv)]
-        for line in llm_response:
-            assignment = line.strip().split(": ")
-            var_number = ord(assignment[0]) - ord("@")
-            var_assignments[var_number - 1] = 1 * var_number if assignment[1] == "true" else -1 * var_number
-
-        missing = False
-        #if missing a var assigment, mark wrong
-        for i, va in enumerate(var_assignments):
-            if va == 0:
-                missing = True
-        if missing == True:
-            evaluations[instance] = False
+        llm_response = output[instance]
+        instance_location = f"{instances_dir}/instance-{instance}{domain.file_ending()}"
+        try:
+            with open(instance_location,"r") as fp:
+                instance_text = fp.read()
+        except FileNotFoundError:
+            print(f"{instance_location} not found. Skipping.")
             continue
-
-        #use solver to check 
-        solver = Solver(bootstrap_with=cnf.clauses)
-        evaluations[instance] = solver.solve(assumptions=var_assignments)
+        evaluations[instance] = domain.evaluate(instance_text, llm_response)
 
         if verbose:
             print(f"Correct: {evaluations[instance]}")
@@ -81,7 +74,6 @@ def evaluate_plan(engine, specified_instances=[], ignore_existing=False, verbose
         print(f"Accuracy: {total_correct/total_instances}")
 
 
-
 if __name__=="__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--engine', type=str, required=True, help='Engine to use \
@@ -92,13 +84,15 @@ if __name__=="__main__":
                         \n babbage = GPT-3 Babbage \
                         \n ada = GPT-3 Ada \
                         ')
+    parser.add_argument('--domain', type=str, required=True, help='Problem domain to evaluate within')
     parser.add_argument('--verbose', type=str, default="False", help='Verbose')
     parser.add_argument('--specific_instances', nargs='+', type=int, default=[], help='List of instances to run')
     parser.add_argument('--ignore_existing', action='store_true', help='Ignore existing output')
     args = parser.parse_args()
     engine = args.engine
+    domain_name = args.domain
     specified_instances = args.specific_instances
     verbose = eval(args.verbose)
     ignore_existing = args.ignore_existing
-    print(f"Engine: {engine}, Verbose: {verbose}")
-    evaluate_plan(engine, specified_instances, ignore_existing, verbose)
+    print(f"Engine: {engine}, Domain: {domain_name}, Verbose: {verbose}")
+    evaluate_plan(engine, domain_name, specified_instances, ignore_existing, verbose)
