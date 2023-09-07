@@ -53,7 +53,8 @@ def evaluate(instance_text,model_response):
     return check_coloring(coloring, instance_text)
 
 
-#### Precompute script         
+#### Precompute script
+# WARNING: Only works from domain_utils directory
 
 if __name__ == "__main__":
     print(f"Precomputing chromatic numbers for all instances in {GRAPH_COLORING_DIRECTORY}")
