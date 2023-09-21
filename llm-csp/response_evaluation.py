@@ -7,10 +7,13 @@ from pysat.solvers import Solver
 import domain_utils
 from domain_utils import *
 
-def evaluate_plan(engine, domain_name, specified_instances=[], ignore_existing=False, verbose=False):
+def evaluate_plan(engine, domain_name, specified_instances=[], ignore_existing=False, verbose=False, backprompting=""):
     instances_dir = f"data/{domain_name}/"
     outputs_dir = f"responses/{domain_name}/{engine}/"
     evals_dir = f"evaluations/{domain_name}/{engine}/"
+    if backprompting:
+        outputs_dir+=f"backprompting-{backprompting}/"
+        evals_dir+=f"backprompting-{backprompting}/"
     outputs_json = outputs_dir+"responses.json"
     evals_json = evals_dir+"evaluations.json"
 
@@ -48,7 +51,7 @@ def evaluate_plan(engine, domain_name, specified_instances=[], ignore_existing=F
                 specified_instances.remove(instance)     
         
         if verbose:
-            print(f"Evaluting instance {instance}")
+            print(f"Evaluating instance {instance}")
 
         llm_response = output[instance]
         instance_location = f"{instances_dir}/instance-{instance}{domain.file_ending()}"
@@ -87,6 +90,7 @@ if __name__=="__main__":
     parser.add_argument('-v', '--verbose', action='store_true')
     parser.add_argument('-s', '--specific_instances', nargs='+', type=int, default=[], help='List of instances to run')
     parser.add_argument('-i', '--ignore_existing', action='store_true', help='Ignore existing output')
+    parser.add_argument('-b', '--backprompting', type=str, default='', help='If backprompting, provide the type of backprompt to pass to the domain. Common types: zero, passfail, full, llm')
     args = parser.parse_args()
     engine = args.engine
     domain_name = args.domain
@@ -94,6 +98,7 @@ if __name__=="__main__":
         raise ValueError(f"Domain name must be an element of {list(domain_utils.domains)}.")
     specified_instances = args.specific_instances
     verbose = args.verbose
+    backprompting = args.backprompting
     ignore_existing = args.ignore_existing
-    print(f"Engine: {engine}, Domain: {domain_name}, Verbose: {verbose}")
-    evaluate_plan(engine, domain_name, specified_instances, ignore_existing, verbose)
+    print(f"Engine: {engine}, Domain: {domain_name}, Verbose: {verbose}, Backprompting: {bool(backprompting)}" )
+    evaluate_plan(engine, domain_name, specified_instances, ignore_existing, verbose, backprompting)

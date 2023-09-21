@@ -9,5 +9,7 @@ domains = {"random_sat":random_sat,"graph_coloring":graph_coloring}
 #       (returns natural language translations of a formal language instance)
 #   3. evaluate: instance_text, model_response -> bool
 #       (returns success/failure of model on an instance)
+#   4. backprompt: instance_text, model_response, backprompt_type -> str
+#       (returns natural language backprompt in response to a query)
 #
 # Instance data for the ith instance must be stored in data/{domain_name}/instance-{i}.{file_ending()}

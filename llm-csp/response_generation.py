@@ -5,14 +5,21 @@ import json
 import time
 from tqdm import tqdm
 import openai
+import domain_utils
+from domain_utils import *
 
 MAX_GPT_RESPONSE_LENGTH = 500
+MAX_BACKPROMPT_LENGTH = 15
 
-def get_responses(engine, domain, specified_instances = [], run_till_completion=False, ignore_existing=False, verbose=False):
-    prompt_dir = f"prompts/{domain}/"
-    output_dir = f"responses/{domain}/{engine}/"
+def get_responses(engine, domain_name, specified_instances = [], run_till_completion=False, ignore_existing=False, verbose=False, backprompting=""):
+    instances_dir = f"data/{domain_name}/"
+    prompt_dir = f"prompts/{domain_name}/"
+    output_dir = f"responses/{domain_name}/{engine}/"
+    if backprompting: output_dir += f"backprompting-{backprompting}/"
     os.makedirs(output_dir, exist_ok=True)
     output_json = output_dir+"responses.json"
+
+    domain = domain_utils.domains[domain_name]
 
     if 'finetuned' in engine:
         # print(engine)
@@ -23,44 +30,74 @@ def get_responses(engine, domain, specified_instances = [], run_till_completion=
         model = {'model':model}
     else:
         model = None
+    
+    output = {}
+    prev_output = {}
+    if os.path.exists(output_json):
+        with open(output_json, 'r') as file:
+            prev_output = json.load(file)
+        if not ignore_existing:
+            output = prev_output
+    assert os.path.exists(prompt_dir+"prompts.json")
+    with open(prompt_dir+"prompts.json", 'r') as file:
+        input = json.load(file) 
+    original_input_n = len(input)
+
+    if len(specified_instances) > 0:
+        input = {str(x) : input[str(x)] for x in specified_instances}
+
+    if not ignore_existing:
+        input = {k: v for k,v in input.items() if k not in prev_output.keys()}
+        if verbose:
+            print(f"{original_input_n-len(input)} out of {original_input_n} instances already completed")
 
     while True:
-        output = {}
-        prev_output = {}
-        if os.path.exists(output_json):
-            with open(output_json, 'r') as file:
-                prev_output = json.load(file)
-            if not ignore_existing:
-                output = prev_output
-        assert os.path.exists(prompt_dir+"prompts.json")
-        with open(prompt_dir+"prompts.json", 'r') as file:
-            input = json.load(file) 
-    
         failed_instances = []
         for instance in tqdm(input):
-            if instance in prev_output.keys():
-                if not ignore_existing:
-                    if verbose:
-                        print(f"Instance {instance} already completed")
-                    continue
-            if len(specified_instances) > 0:
-                if instance not in specified_instances:
-                    continue
-                else:
-                    specified_instances.remove(instance)
-            
             if verbose:
                 print(f"Sending query to LLM: Instance {instance}")
             query = input[instance]
             stop_statement = "[STATEMENT]"
             llm_response = send_query(query, engine, MAX_GPT_RESPONSE_LENGTH, model=model, stop_statement=stop_statement)
+
             if not llm_response:
                 failed_instances.append(instance)
                 print(f"Failed instance: {instance}")
                 continue
             if verbose:
                 print(f"LLM response: {llm_response}")
-            output[instance]=llm_response
+            
+            response_trace = [llm_response]
+            if backprompting:
+                instance_location = f"{instances_dir}/instance-{instance}{domain.file_ending()}"
+                try:
+                    with open(instance_location,"r") as fp:
+                        instance_text = fp.read()
+                except FileNotFoundError:
+                    print(f"{instance_location} not found. Can't generate backprompt. Skipping instance {instance} entirely.")
+                    continue
+                for trial in range(0, MAX_BACKPROMPT_LENGTH):
+                    if verbose:
+                        print(f"Attempting {backprompting}-type backprompt #{trial} for instance {instance}")
+                    if backprompting == "llm":
+                        backprompt_query = domain.backprompt(instance_text, llm_response, "llm-query")
+                        backprompt = send_query(backprompt_query, engine, MAX_GPT_RESPONSE_LENGTH, model=model, stop_statement=stop_statement)
+                        backprompt = domain.backprompt(instance_text, backprompt, "llm-wrapper")
+                    else: backprompt = domain.backprompt(instance_text, llm_response, backprompting)
+                    if verbose:
+                        print(f"Backprompt given: {backprompt}")
+                    if check_backprompt(backprompt):
+                        if verbose:
+                            print(f"Verifier confirmed success.")
+                        break
+                    response_trace.append(backprompt)
+                    query = "\n".join(response_trace)
+                    llm_response = send_query(query, engine, MAX_GPT_RESPONSE_LENGTH, model=model, stop_statement=stop_statement)
+                    if verbose:
+                        print(f"LLM responded with {llm_response}")
+                    response_trace.append(llm_response)
+
+            output[instance]="\n".join(response_trace)
             with open(output_json, 'w') as file:
                 json.dump(output, file, indent=4)
         
@@ -69,10 +106,15 @@ def get_responses(engine, domain, specified_instances = [], run_till_completion=
                 break
             else:
                 print(f"Retrying failed instances: {failed_instances}")
+                input = {str(x):input[str(x)] for x in failed_instances}
                 time.sleep(5)
         else:
             break
-    
+
+def check_backprompt(backprompt):
+    STOP_PHRASE = "Verifier confirmed success."
+    return STOP_PHRASE.lower() in backprompt.lower()
+
 def send_query(query, engine, max_tokens, model=None, stop_statement="[STATEMENT]"):
     max_token_err_flag = False
     if engine == 'finetuned':
@@ -142,13 +184,17 @@ if __name__=="__main__":
     parser.add_argument('-r', '--run_till_completion', type=str, default="False", help='Run till completion')
     parser.add_argument('-s', '--specific_instances', nargs='+', type=int, default=[], help='List of instances to run')
     parser.add_argument('-i', '--ignore_existing', action='store_true', help='Ignore existing output')
+    parser.add_argument('-b', '--backprompt', type=str, default='', help='If backprompting, provide the type of backprompt to pass to the domain. Common types: zero, passfail, full, llm')
     args = parser.parse_args()
     engine = args.engine
-    domain = args.domain
+    domain_name = args.domain
+    if domain_name not in domain_utils.domains:
+        raise ValueError(f"Domain name must be an element of {list(domain_utils.domains)}.")
     specified_instances = args.specific_instances
     verbose = args.verbose
+    backprompt = args.backprompt
     run_till_completion = eval(args.run_till_completion)
     ignore_existing = args.ignore_existing
-    print(f"Engine: {engine}, Domain: {domain}, Verbose: {verbose}, Run till completion: {run_till_completion}")
-    get_responses(engine, domain, specified_instances, run_till_completion, ignore_existing, verbose)
+    print(f"Engine: {engine}, Domain: {domain_name}, Verbose: {verbose}, Run till completion: {run_till_completion}, Backprompt: {backprompt}")
+    get_responses(engine, domain_name, specified_instances, run_till_completion, ignore_existing, verbose, backprompt)
 
