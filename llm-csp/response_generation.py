@@ -45,8 +45,7 @@ def get_responses(engine, domain_name, specified_instances = [], run_till_comple
 
     if len(specified_instances) > 0:
         input = {str(x) : input[str(x)] for x in specified_instances}
-
-    if not ignore_existing:
+    elif not ignore_existing:
         input = {k: v for k,v in input.items() if k not in prev_output.keys()}
         if verbose:
             print(f"{original_input_n-len(input)} out of {original_input_n} instances already completed")
@@ -65,10 +64,12 @@ def get_responses(engine, domain_name, specified_instances = [], run_till_comple
                 print(f"Failed instance: {instance}")
                 continue
             if verbose:
-                print(f"LLM response: {llm_response}")
+                print(f"LLM response:\n{llm_response}")
             
-            response_trace = [llm_response]
+            response_trace = [query, llm_response]
+            
             if backprompting:
+                failure = False
                 instance_location = f"{instances_dir}/instance-{instance}{domain.file_ending()}"
                 try:
                     with open(instance_location,"r") as fp:
@@ -79,9 +80,19 @@ def get_responses(engine, domain_name, specified_instances = [], run_till_comple
                 for trial in range(0, MAX_BACKPROMPT_LENGTH):
                     if verbose:
                         print(f"Attempting {backprompting}-type backprompt #{trial} for instance {instance}")
+                    if "sorry" in llm_response or "constraints" in llm_response:
+                            print(f"Giving up because LLM apologized")
+                            break
                     if backprompting == "llm":
+                        print(f"Generating backprompt with LLM.")
                         backprompt_query = domain.backprompt(instance_text, llm_response, "llm-query")
+                        print(f"Sending: {backprompt_query}")
                         backprompt = send_query(backprompt_query, engine, MAX_GPT_RESPONSE_LENGTH, model=model, stop_statement=stop_statement)
+                        if not backprompt:
+                            failure = True
+                            failed_instances.append(instance)
+                            print(f"Failed instance: {instance}")
+                            break
                         backprompt = domain.backprompt(instance_text, backprompt, "llm-wrapper")
                     else: backprompt = domain.backprompt(instance_text, llm_response, backprompting)
                     if verbose:
@@ -92,10 +103,15 @@ def get_responses(engine, domain_name, specified_instances = [], run_till_comple
                         break
                     response_trace.append(backprompt)
                     query = "\n".join(response_trace)
+                    print("###################FULL QUERY####################")
+                    print(query)
+                    print("###################END  QUERY####################")
                     llm_response = send_query(query, engine, MAX_GPT_RESPONSE_LENGTH, model=model, stop_statement=stop_statement)
                     if verbose:
-                        print(f"LLM responded with {llm_response}")
+                        print(f"LLM responded with:\n{llm_response}")
                     response_trace.append(llm_response)
+                if failure:
+                    continue
 
             output[instance]="\n".join(response_trace)
             with open(output_json, 'w') as file:

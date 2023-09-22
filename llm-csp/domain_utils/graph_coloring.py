@@ -106,7 +106,7 @@ def backprompt(instance_text, model_response, backprompt_type):
         check = check_coloring(model_response, instance_text)
         if not check:
             return STOP_PHRASE
-        else: return f"This is not correct. Please provide a correct coloring. {DEFAULT_PROMPT_END}"
+        else: return f"This is not correct. Using the previously provided graph, please provide a correct coloring. {DEFAULT_PROMPT_END}"
     elif backprompt_type == "full":
         check = check_coloring(model_response, instance_text)
         if not check:
@@ -116,7 +116,8 @@ def backprompt(instance_text, model_response, backprompt_type):
         backprompt_query = f"The following graph, described as a set of edges, has an optimal coloring number of {optimal_coloring_number(instance_text)}:\n"
         num_verts, graph_text = generate_graph(instance_text)
         backprompt_query+= graph_text
-        backprompt_query+= f"Please check if the coloring is correct. If it is, say '{STOP_PHRASE}' Do not provide anything else in your response. If it is incorrect, please point out which same-color vertices share an edge."
+        backprompt_query+= f"Please check if this coloring is correct:" +model_response
+        backprompt_query+= f"\nIf it is, say '{STOP_PHRASE}' Do not provide anything else in your response. If it is incorrect, please point out which same-color vertices share an edge."
         return backprompt_query
     elif backprompt_type == "llm-wrapper":
         backprompt = "This is incorrect. Feedback:\n"
