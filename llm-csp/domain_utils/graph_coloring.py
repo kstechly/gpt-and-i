@@ -132,7 +132,7 @@ def backprompt(instance_text, model_response, backprompt_type):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('task', help='generate or chromatic'),
+    parser.add_argument('task', help='generate, chromatic, or stats'),
     parser.add_argument('-s','--start', type=int, default=1, help='start index')
     parser.add_argument('-e', '--end', type=int, default=100, help='end index')
     parser.add_argument('-t','--total', type=int, default=10, help='total number of nodes')
@@ -185,3 +185,16 @@ if __name__ == "__main__":
                     degs = [x[1] for x in G.degree()]
                     print(f"Max degree for {instance} is {max(degs)}")
                     print(f"Avg degree for {instance} is {sum(degs)/len(degs)}")
+    elif task == "dupe":
+        print(f"Checking for duplicates across all instances in {GRAPH_COLORING_DIRECTORY}")
+        inst_list = []
+        for instance in os.listdir(GRAPH_COLORING_DIRECTORY):
+            if instance.startswith("instance-"):
+                with open(GRAPH_COLORING_DIRECTORY+instance,"r") as fp:
+                    instance_text = fp.read()
+                    G = grinpy.Graph(parse_dimacs(instance_text))
+                    for x, y in inst_list:
+                        if grinpy.is_isomorphic(G,x):
+                            print(f"{instance} is isomorphic to {y}")
+                    inst_list.append([G, instance])
+        print(f"Finished dupe check")

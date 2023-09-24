@@ -103,9 +103,9 @@ def get_responses(engine, domain_name, specified_instances = [], run_till_comple
                         break
                     response_trace.append(backprompt)
                     query = "\n".join(response_trace)
-                    print("###################FULL QUERY####################")
+                    '''print("###################FULL QUERY####################")
                     print(query)
-                    print("###################END  QUERY####################")
+                    print("###################END  QUERY####################")'''
                     llm_response = send_query(query, engine, MAX_GPT_RESPONSE_LENGTH, model=model, stop_statement=stop_statement)
                     if verbose:
                         print(f"LLM responded with:\n{llm_response}")
@@ -113,7 +113,7 @@ def get_responses(engine, domain_name, specified_instances = [], run_till_comple
                 if failure:
                     continue
 
-            output[instance]="\n".join(response_trace)
+            output[instance]="\n".join(response_trace) #TODO [1:] or better: change the data format to split up the trace
             with open(output_json, 'w') as file:
                 json.dump(output, file, indent=4)
         
