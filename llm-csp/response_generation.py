@@ -66,7 +66,9 @@ def get_responses(engine, domain_name, specified_instances = [], run_till_comple
             if verbose:
                 print(f"LLM response:\n{llm_response}")
             
-            response_trace = [query, llm_response]
+            response_trace = {}
+            response_trace["query"] = query
+            response_trace["response"] = llm_response
             
             if backprompting:
                 failure = False
@@ -101,19 +103,20 @@ def get_responses(engine, domain_name, specified_instances = [], run_till_comple
                         if verbose:
                             print(f"Verifier confirmed success.")
                         break
-                    response_trace.append(backprompt)
-                    query = "\n".join(response_trace)
+                    response_trace[f"backprompt {trial}"] = backprompt
+                    # NOTE: the following line relies on dictionary ordering, which makes python 3.7+ a requirement
+                    query = "\n".join(response_trace.values())
                     '''print("###################FULL QUERY####################")
                     print(query)
                     print("###################END  QUERY####################")'''
                     llm_response = send_query(query, engine, MAX_GPT_RESPONSE_LENGTH, model=model, stop_statement=stop_statement)
                     if verbose:
                         print(f"LLM responded with:\n{llm_response}")
-                    response_trace.append(llm_response)
+                    response_trace[f"response {trial}"] = llm_response
                 if failure:
                     continue
 
-            output[instance]="\n".join(response_trace) #TODO [1:] or better: change the data format to split up the trace
+            output[instance]=response_trace #TODO FIX THE OLD DATA TO CONFORM
             with open(output_json, 'w') as file:
                 json.dump(output, file, indent=4)
         

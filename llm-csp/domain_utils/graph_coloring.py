@@ -13,6 +13,9 @@ import grinpy
 import os
 import argparse
 import matplotlib.pyplot as plt
+import json
+import time
+import re
 
 def parse_dimacs(instance_text):
     parsed = []
@@ -36,7 +39,7 @@ def optimal_coloring_number(instance_text):
 
 def check_coloring(model_response, instance_text):
     coloring = {}
-    for line in model_response.split(f"{PROMPT_SPLITTER}\n")[-1].split("\n"):
+    for line in model_response.split("\n"):
         assignment = line.strip().split(": ")
         if len(assignment) < 2:
             continue
@@ -93,10 +96,54 @@ def generate(instance_text):
     prompt += DEFAULT_PROMPT_END
     return prompt  
 
-def evaluate(instance_text, model_response):
-    check =  check_coloring(model_response, instance_text)
-    #print(check)
-    return not check
+def evaluate(instance_text, response_trace):
+    evaluation = {}
+    edges = parse_dimacs(instance_text)
+    graph = grinpy.Graph(edges)
+    response_keys = [x for x in response_trace if "response" in x]
+    evaluation["correct"] = not check_coloring(response_trace[max(response_keys)], instance_text)
+    for x in response_keys:
+        evaluation[x] = not check_coloring(response_trace[x], instance_text)
+    evaluation["number of backprompts"] = len(response_keys)-1
+    #TODO
+    #correct, missing, incorrect = 0
+    #TODO: loop over the backprompts?
+    #evaluation["correct backprompt phrases"] = 
+    #evaluation["missing backprompt phrases"] =
+    #evaluation["incorrect backprompt phrases"] =
+
+    #TODO check if it repeats itself
+    #evaluation["number of unique attempts"] = 
+
+ 
+    coloring = {}
+    evaluation["valid assignment"] = True
+    evaluation["number of errors"] = 0
+    for line in response_trace[max(response_keys)].split("\n"):
+        assignment = line.strip().split(": ")
+        if len(assignment) < 2:
+            continue
+        vertex_number = assignment[0]
+        color = assignment[1]
+        coloring[vertex_number] = color
+    for edge in edges:
+        if edge[0] not in coloring:
+            evaluation["valid assignment"] = False
+        if edge[1] not in coloring:
+            evaluation["valid assignment"] = False
+        if coloring[edge[0]] == coloring[edge[1]]:
+            evaluation["number of errors"] +=1
+               
+    #evaluation["colors used"] = 
+    
+
+    #graph stats
+    num_verts, _ = generate_graph(instance_text)
+    evaluation["number of nodes"] = num_verts
+    evaluation["number of edges"] = grinpy.number_of_edges(graph)
+    evaluation["chromatic number"] = optimal_coloring_number(instance_text)
+
+    return evaluation
 
 def backprompt(instance_text, model_response, backprompt_type):
     STOP_PHRASE = "Verifier confirmed success."
@@ -198,3 +245,43 @@ if __name__ == "__main__":
                             print(f"{instance} is isomorphic to {y}")
                     inst_list.append([G, instance])
         print(f"Finished dupe check")
+    elif task == "convert": 
+        RESULTS_LOCATION = "../responses/graph_coloring/gpt-4_chat/backprompting-full/"
+        BACKPROMPT_SPLITTER = "\nVertex"
+        PROMPTS_LOCATION = "../prompts/graph_coloring/"
+        print(f"Converting all instances in {RESULTS_LOCATION}responses.json")
+        convert_num = 0
+        total_num = 0
+        results = {}
+        with open(RESULTS_LOCATION+"responses.json", "r") as fp:
+            old_results = json.load(fp)
+        with open(PROMPTS_LOCATION+"prompts.json", "r") as fp:
+            queries = json.load(fp)
+        #save a copy jic
+        with open(RESULTS_LOCATION+f"responses-old-{int(time.time())}.json","w") as fp:
+            json.dump(old_results, fp, indent=4)
+        for x in old_results:
+            total_num+=1
+            if not type(old_results[x]) == str:
+                results[x] = old_results[x]
+                continue
+            splitters = PROMPT_SPLITTER, BACKPROMPT_SPLITTER
+            regex_p = '|'.join(map(re.escape, splitters))
+            #y = old_results[x].split(PROMPT_SPLITTER)
+            y = re.split(regex_p, old_results[x])
+            if len(y) <= 2:
+                results[x] = {"query":queries[x]}
+                results[x]["response"] = old_results[x]
+                convert_num+=1
+            else:
+                results[x] = {"query":queries[x]}
+                results[x]["response"] = y[1]
+                for n in range(2, len(y)):
+                    if n%2:
+                        results[x][f"response {int((n-1)/2-1)}"] = y[n]
+                    else: 
+                        results[x][f"backprompt {int(n/2-1)}"] = BACKPROMPT_SPLITTER+y[n]+PROMPT_SPLITTER
+                convert_num+=1
+        with open(RESULTS_LOCATION+"responses.json", "w") as fp:
+            json.dump(results, fp, indent=4)
+        print(f"{convert_num} out of {total_num} converted")

@@ -52,7 +52,7 @@ def evaluate(instance_text, model_response):
         return False 
     #use solver to check 
     solver = Solver(bootstrap_with=cnf.clauses)
-    return solver.solve(assumptions=var_assignments)
+    return {"correct":solver.solve(assumptions=var_assignments)}
 
 def backprompt(instance_text, model_response):
     raise NotImplementedError
