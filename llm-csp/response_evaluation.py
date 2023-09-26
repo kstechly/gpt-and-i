@@ -35,11 +35,12 @@ def evaluate_plan(engine, domain_name, specified_instances=[], ignore_existing=F
     total_correct = 0
     total_instances = 0
     evaluations = {}
+    old_format = False
     for instance in tqdm(output):
         if instance in prev_evals.keys():
             if not ignore_existing:
                 evaluations[instance]=prev_evals[instance]
-                total_correct += int(prev_evals[instance])
+                total_correct += int(prev_evals[instance]["correct"])
                 total_instances += 1
                 if verbose:
                     print(f"Instance {instance} already evaluated")
@@ -53,7 +54,10 @@ def evaluate_plan(engine, domain_name, specified_instances=[], ignore_existing=F
         if verbose:
             print(f"Evaluating instance {instance}")
 
-        llm_response = output[instance]
+        if type(output[instance]) == str:
+            old_format = True
+            raise NotImplementedError
+            llm_response = output[instance]
         instance_location = f"{instances_dir}/instance-{instance}{domain.file_ending()}"
         try:
             with open(instance_location,"r") as fp:
@@ -61,11 +65,11 @@ def evaluate_plan(engine, domain_name, specified_instances=[], ignore_existing=F
         except FileNotFoundError:
             print(f"{instance_location} not found. Skipping.")
             continue
-        evaluations[instance] = domain.evaluate(instance_text, llm_response)
+        evaluations[instance] = domain.evaluate(instance_text, output[instance])
 
         if verbose:
-            print(f"Correct: {evaluations[instance]}")
-        total_correct += int(evaluations[instance])
+            print(f"Correct: {evaluations[instance]['correct']}")
+        total_correct += int(evaluations[instance]["correct"])
         total_instances += 1
 
         with open(evals_json, 'w') as file:
@@ -74,6 +78,8 @@ def evaluate_plan(engine, domain_name, specified_instances=[], ignore_existing=F
         print(f"Total correct: {total_correct}")
         print(f"Total instances: {total_instances}")
         print(f"Accuracy: {total_correct/total_instances}")
+        if old_format:
+            print(f"Warning: This data contains entries in the old (string) format")
 
 
 if __name__=="__main__":
