@@ -2,8 +2,6 @@ import os
 import argparse
 import json
 from tqdm import tqdm
-from pysat.formula import CNF
-from pysat.solvers import Solver
 import domain_utils
 from domain_utils import *
 
