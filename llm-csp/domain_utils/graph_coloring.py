@@ -5,6 +5,8 @@ DEFAULT_PROMPT_END = "Please provide each vertex's color. Do not skip any vertic
 CHROMATIC_NUMBER_KEY = "OPTIMAL CHROMATIC NUMBER === "
 GRAPH_COLORING_DIRECTORY = "../data/graph_coloring/"
 
+STOP_PHRASE = "Verifier confirmed success."
+
 INITIAL_NODES = 3
 NEIGHBOR_P = .4
 SOURCE_P = .2
@@ -16,13 +18,14 @@ import matplotlib.pyplot as plt
 import json
 import time
 import re
+import random
 
 def parse_dimacs(instance_text):
     parsed = []
     for line in str(instance_text).split("\n"):
         text = line.split(" ")
         if text[0] == "e":
-            parsed.append((text[1],text[2]))
+            parsed.append([text[1],text[2]])
     return parsed
 
 def construct_dimacs(parsed_graph):
@@ -48,19 +51,54 @@ def check_coloring(model_response, instance_text):
         coloring[vertex_number] = color
     edges = parse_dimacs(instance_text)
     # check if coloring is valid
+    wrong_edges = []
     for edge in edges:
         if edge[0] not in coloring:
             return f"Vertex {edge[0]} was not given a value in the coloring. {DEFAULT_PROMPT_END}"
         if edge[1] not in coloring:
             return f"Vertex {edge[1]} was not given a value in the coloring. {DEFAULT_PROMPT_END}"
         if coloring[edge[0]] == coloring[edge[1]]:
-            return f"Vertex {edge[0]} and vertex {edge[1]} were both colored {coloring[edge[0]]} despite being connected by an edge.\nThis is wrong. Please recolor. {DEFAULT_PROMPT_END}"
+            wrong_edges.append(edge)
+    if wrong_edges:
+        return wrong_edges, coloring
     # check if coloring is optimal
     optimal_num = int(optimal_coloring_number(instance_text))
     if optimal_num == len(set(coloring.values())):
         return ""
     else: 
         return f"This coloring is not optimal. It uses {len(set(coloring.values()))} colors, when only {int(optimal_coloring_number(instance_text))} are necessary.\n Please recolor. {DEFAULT_PROMPT_END}"
+
+def evil_check_coloring(model_response, instance_text):
+    coloring = {}
+    for line in model_response.split("\n"):
+        assignment = line.strip().split(": ")
+        if len(assignment) < 2:
+            continue
+        vertex_number = assignment[0]
+        color = assignment[1]
+        coloring[vertex_number] = color
+    edges = parse_dimacs(instance_text)
+    # check if coloring is valid
+    wrong_edges = []
+    correct_edges = []
+    for edge in edges:
+        if edge[0] not in coloring:
+            return f"Vertex {edge[0]} was not given a value in the coloring. {DEFAULT_PROMPT_END}"
+        if edge[1] not in coloring:
+            return f"Vertex {edge[1]} was not given a value in the coloring. {DEFAULT_PROMPT_END}"
+        if coloring[edge[0]] == coloring[edge[1]]:
+            wrong_edges.append(edge)
+        if coloring[edge[0]] != coloring[edge[1]]:
+            correct_edges.append(edge)
+    if wrong_edges:
+        return correct_edges, coloring
+    # check if coloring is optimal
+    optimal_num = int(optimal_coloring_number(instance_text))
+    if optimal_num == len(set(coloring.values())):
+        return ""
+    else: 
+        return f"This coloring is not optimal. It uses {len(set(coloring.values()))} colors, when only {int(optimal_coloring_number(instance_text))} are necessary.\n Please recolor. {DEFAULT_PROMPT_END}"
+
 
 def generate_random_graph(num_nodes, edge_p):
     graph_attempt = grinpy.gnp_random_graph(num_nodes, edge_p)
@@ -87,37 +125,113 @@ def generate_graph(instance_text):
 def file_ending():
     return ".col"
 
-def generate(instance_text):
+def generate(instance_text, problem_type):
     prompt = DEFAULT_PROMPT_START
     prompt += f"You may use at most {optimal_coloring_number(instance_text)} colors.\n"
     num_verts, graph_text = generate_graph(instance_text)
     prompt += graph_text
     prompt+=f"There are a total of {num_verts} vertices. Please label every vertex, even if it is disconnected from the rest of the graph."
     prompt += DEFAULT_PROMPT_END
-    return prompt  
+    return prompt
 
-def evaluate(instance_text, response_trace):
+def evaluate(instance_text, response_trace, problem_type=""):
     evaluation = {}
     edges = parse_dimacs(instance_text)
     graph = grinpy.Graph(edges)
     response_keys = [x for x in response_trace if "response" in x]
-    evaluation["correct"] = not check_coloring(response_trace[max(response_keys)], instance_text)
+    backprompt_keys = [x for x in response_trace if "backprompt" in x]
+    last_response = "response"
+    last_backprompt = ""
+    if len(response_keys)>1:
+        last_response = f"response {len(response_keys)-2}"
+    if len(backprompt_keys)>1:
+        last_backprompt = f"backprompt {len(backprompt_keys)-1}"
+    evaluation["correct"] = not check_coloring(response_trace[last_response], instance_text)
+    evaluation["number of backprompts before correct"] = 0
     for x in response_keys:
         evaluation[x] = not check_coloring(response_trace[x], instance_text)
+        if not evaluation["number of backprompts before correct"] and evaluation[x] and not x == "response":
+            evaluation["number of backprompts before correct"] = int(x[-2:])
     evaluation["number of backprompts"] = len(response_keys)-1
+
+    evaluation["stopped"] = False
+    if not last_backprompt or STOP_PHRASE.replace(".", "") in response_trace[last_backprompt]:
+        evaluation["stopped"] = True
     #TODO
     #correct, missing, incorrect = 0
     #TODO: loop over the backprompts?
-    #evaluation["correct backprompt phrases"] = 
-    #evaluation["missing backprompt phrases"] =
-    #evaluation["incorrect backprompt phrases"] =
+
+    for n in range(0, evaluation["number of backprompts"]):
+        if not "This is not correct." in response_trace[f"backprompt {n}"] and not "given a value" in response_trace[f"backprompt {n}"]: 
+            backprompt_edges = []
+            for sentence in response_trace[f"backprompt {n}"].split("."):
+                if "Vertex" in sentence:
+                    y = re.findall(r'(\d+)', sentence) #gives [vert1, vert2, color]
+                    backprompt_edges.append([y[0],y[1],y[2]])
+            response_to_backprompt = response_trace[f"response {n}"]
+            #process response into edges
+            coloring = {}
+            for line in response_to_backprompt.split("\n"):
+                assignment = line.strip().split(": ")
+                if len(assignment) < 2:
+                    continue
+                vertex_number = assignment[0]
+                color = assignment[1]
+                y = re.findall(r'(\d+)', color)
+                if y:
+                    coloring[vertex_number] = y[0]
+            if not coloring:
+                continue
+            #check if the vertices have changed color
+            print(n)
+            print(coloring)
+            print(backprompt_edges)
+            print(response_to_backprompt)
+            evaluation[f"backprompt {n} vertex change"] = 0
+            evaluation[f"backprompt {n} edge corrected"] = 0
+            evaluation[f"backprompt {n} number of edges"] = 0
+            evaluation[f"backprompt {n} number of vertices"] = 0
+            vertices = []
+            for edge in backprompt_edges:
+                evaluation[f"backprompt {n} number of edges"] +=1
+                if edge[0] not in vertices:
+                    evaluation[f"backprompt {n} number of vertices"] +=1
+                if coloring[edge[0]] is not edge[2] or coloring[edge[1]] is not edge[2]:
+                    evaluation[f"backprompt {n} vertex change"] +=1
+                if coloring[edge[0]] is not coloring[edge[1]]:
+                    evaluation[f"backprompt {n} edge corrected"] +=1
+
+        #break down how it changed from the previous prompt
+
+
+
+    #evaluation[f"total backprompt edges {n}"] = 
+    #evaluation[f"correct backprompt edges {n}"] = 
+    #evaluation[f"missing backprompt edges {n}"] =
+    #evaluation[f"incorrect backprompt edges {n}"] =
+    #evaluation[f"changed backprompt edges {n}"] =
 
     #TODO check if it repeats itself
     #evaluation["number of unique attempts"] = 
+    #evaluation["number of isomorphic attempts"] = 
+
+
+    # For n=5:
+    evaluation["ever correct"] = False
+    evaluation["total correct"] = 0
+    for key in response_keys:
+        check = check_coloring(response_trace[key], instance_text)
+        if not check:
+            evaluation["ever correct"] = True
+            evaluation["total correct"]+=1
+        elif len(check) == 2:
+            wrong_edges, _ = check_coloring(response_trace[key], instance_text)
+            evaluation[f"{key} edges wrong"] = len(wrong_edges)
 
  
     coloring = {}
     evaluation["valid assignment"] = True
+    evaluation["full coloring"] = True
     evaluation["number of errors"] = 0
     for line in response_trace[max(response_keys)].split("\n"):
         assignment = line.strip().split(": ")
@@ -127,11 +241,10 @@ def evaluate(instance_text, response_trace):
         color = assignment[1]
         coloring[vertex_number] = color
     for edge in edges:
-        if edge[0] not in coloring:
+        if edge[0] not in coloring or edge[1] not in coloring:
             evaluation["valid assignment"] = False
-        if edge[1] not in coloring:
-            evaluation["valid assignment"] = False
-        if coloring[edge[0]] == coloring[edge[1]]:
+        elif coloring[edge[0]] == coloring[edge[1]]:
+            evaluation["full coloring"] = False
             evaluation["number of errors"] +=1
                
     #evaluation["colors used"] = 
@@ -146,7 +259,6 @@ def evaluate(instance_text, response_trace):
     return evaluation
 
 def backprompt(instance_text, model_response, backprompt_type):
-    STOP_PHRASE = "Verifier confirmed success."
     if backprompt_type == "zero":
         return f"This coloring may or may not be correct. If it is correct, please repeat it. Do not provide anything else in your response. If it is not correct, provide a correct coloring. {DEFAULT_PROMPT_END}"
     elif backprompt_type == "passfail":
@@ -154,11 +266,30 @@ def backprompt(instance_text, model_response, backprompt_type):
         if not check:
             return STOP_PHRASE
         else: return f"This is not correct. Using the previously provided graph, please provide a correct coloring. {DEFAULT_PROMPT_END}"
+    elif backprompt_type == "first":
+        check = check_coloring(model_response, instance_text)
+        if not check:
+            return STOP_PHRASE
+        else:
+            if check is str:
+                return check
+            else:
+                wrong_edges, coloring = check
+                return f"Vertex {wrong_edges[0][0]} and vertex {wrong_edges[0][1]} were both colored {coloring[wrong_edges[0][0]]} despite being connected by an edge.\nThis is wrong. Please recolor. {DEFAULT_PROMPT_END}"
     elif backprompt_type == "full":
         check = check_coloring(model_response, instance_text)
         if not check:
             return STOP_PHRASE
-        else: return check
+        else:
+            if check is str:
+                return check
+            else:
+                wrong_edges, coloring = check
+                feedback = ""
+                for edge in wrong_edges:
+                    feedback +=f"Vertex {edge[0]} and vertex {edge[1]} were both colored {coloring[edge[0]]} despite being connected by an edge. "
+                feedback+=f"\nThis is wrong. Please recolor. {DEFAULT_PROMPT_END}"
+                return feedback
     elif backprompt_type == "llm-query":
         backprompt_query = f"The following graph, described as a set of edges, has an optimal coloring number of {optimal_coloring_number(instance_text)}:\n"
         num_verts, graph_text = generate_graph(instance_text)
@@ -171,6 +302,18 @@ def backprompt(instance_text, model_response, backprompt_type):
         backprompt += model_response
         backprompt += "\n\nUsing this feedback, please try again. " +DEFAULT_PROMPT_END
         return backprompt
+    elif backprompt_type == "evil":
+        check = evil_check_coloring(model_response, instance_text)
+        if not check:
+            return STOP_PHRASE
+        else:
+            if check is str:
+                return check
+            else:
+                correct_edges, coloring = check
+                edge_num = random.randrange(0, len(correct_edges))
+                return f"Vertex {correct_edges[edge_num][0]} and vertex {correct_edges[edge_num][1]} were both colored {coloring[correct_edges[edge_num][0]]} despite being connected by an edge.\nThis is wrong. Please recolor. {DEFAULT_PROMPT_END}"
+ 
     else: raise NotImplementedError
     
 
