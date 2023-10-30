@@ -1,0 +1,25 @@
+
+e 0 10
+e 0 11
+e 1 3
+e 1 9
+e 2 5
+e 2 7
+e 2 9
+e 3 5
+e 3 8
+e 3 9
+e 4 11
+e 6 7
+e 6 11
+e 7 9
+e 7 11
+e 9 10
+e 9 11
+e 10 11
+c OPTIMAL CHROMATIC NUMBER === 3
+c correct 0: Color 1\n1: Color 2\n2: Color 0\n3: Color 0\n4: Color 1\n5: Color 1\n6: Color 1\n7: Color 2\n8: Color 1\n9: Color 1\n10: Color 2\n11: Color 0\n
+c ablated 0: Color 1\n1: Color 2\n2: Color 0\n3: Color 1\n4: Color 1\n5: Color 1\n6: Color 1\n7: Color 2\n8: Color 1\n9: Color 1\n10: Color 2\n11: Color 0\n
+c non-optimal 0: Color 3\n1: Color 2\n2: Color 0\n3: Color 0\n4: Color 1\n5: Color 3\n6: Color 3\n7: Color 2\n8: Color 1\n9: Color 1\n10: Color 2\n11: Color 0\n
+c random 0: Color 2\n1: Color 0\n2: Color 2\n3: Color 0\n4: Color 0\n5: Color 1\n6: Color 2\n7: Color 0\n8: Color 2\n9: Color 1\n10: Color 2\n11: Color 0\n
+c llm 0: Color1\n1: Color2\n2: Color3\n3: Color1\n4: Color2\n5: Color2\n6: Color3\n7: Color1\n8: Color3\n9: Color3\n10: Color2\n11: Color3
