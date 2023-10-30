@@ -1,11 +1,11 @@
 # To add a new domain, create a module in this subfolder, and then add it to the following:
-from domain_utils import random_sat, graph_coloring
-__all__ = ["random_sat","graph_coloring"]
-domains = {"random_sat":random_sat,"graph_coloring":graph_coloring}
+from domain_utils import random_sat, graph_coloring, color_verification
+__all__ = ["random_sat","graph_coloring","color_verification"]
+domains = {"random_sat":random_sat,"graph_coloring":graph_coloring,"color_verification":color_verification}
 
 # A domain module must contain three functions:
 #   1. file_ending: None -> str
-#   2. generate: instance_text -> str
+#   2. generate: instance_text, problem_type -> str
 #       (returns natural language translations of a formal language instance)
 #   3. evaluate: instance_text, response_trace -> dict
 #       (returns a dict summarizing results. must contain "correct" bool key)

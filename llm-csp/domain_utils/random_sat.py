@@ -36,7 +36,7 @@ def generate(instance_text):
     prompt += "\n" + DEFAULT_PROMPT_END
     return prompt
 
-def evaluate(instance_text, model_response):
+def evaluate(instance_text, model_response, problem_type=""):
     cnf = CNF(from_string=instance_text)
     var_assignments = [0 for _ in range(cnf.nv)]
     for line in model_response.split("\n"):

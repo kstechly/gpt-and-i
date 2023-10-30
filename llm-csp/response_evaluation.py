@@ -5,13 +5,16 @@ from tqdm import tqdm
 import domain_utils
 from domain_utils import *
 
-def evaluate_plan(engine, domain_name, specified_instances=[], ignore_existing=False, verbose=False, backprompting=""):
+def evaluate_plan(engine, domain_name, specified_instances=[], ignore_existing=False, verbose=False, backprompting="", problem_type=""):
     instances_dir = f"data/{domain_name}/"
     outputs_dir = f"responses/{domain_name}/{engine}/"
     evals_dir = f"evaluations/{domain_name}/{engine}/"
     if backprompting:
         outputs_dir+=f"backprompting-{backprompting}/"
         evals_dir+=f"backprompting-{backprompting}/"
+    if problem_type:
+        outputs_dir+=f"{problem_type}/"
+        evals_dir+=f"{problem_type}/"
     outputs_json = outputs_dir+"responses.json"
     evals_json = evals_dir+"evaluations.json"
 
@@ -95,6 +98,7 @@ if __name__=="__main__":
     parser.add_argument('-s', '--specific_instances', nargs='+', type=int, default=[], help='List of instances to run')
     parser.add_argument('-i', '--ignore_existing', action='store_true', help='Ignore existing output')
     parser.add_argument('-b', '--backprompting', type=str, default='', help='If backprompting, provide the type of backprompt to pass to the domain. Common types: zero, passfail, full, llm')
+    parser.add_argument('-p', '--problem', type=str, default='', help='If doing a domain subproblem, specify it here')
     args = parser.parse_args()
     engine = args.engine
     domain_name = args.domain
@@ -104,5 +108,6 @@ if __name__=="__main__":
     verbose = args.verbose
     backprompting = args.backprompting
     ignore_existing = args.ignore_existing
+    problem_type = args.problem
     print(f"Engine: {engine}, Domain: {domain_name}, Verbose: {verbose}, Backprompting: {bool(backprompting)}" )
-    evaluate_plan(engine, domain_name, specified_instances, ignore_existing, verbose, backprompting)
+    evaluate_plan(engine, domain_name, specified_instances, ignore_existing, verbose, backprompting, problem_type=problem_type)
