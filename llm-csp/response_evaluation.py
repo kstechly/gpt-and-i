@@ -34,6 +34,9 @@ def evaluate_plan(engine, domain_name, specified_instances=[], ignore_existing=F
                 prev_evals = json.load(file)
 
     total_correct = 0
+    total_ever_correct = 0
+    total_stopped = 0
+    total_stopped_correct = 0
     total_instances = 0
     evaluations = {}
     old_format = False
@@ -42,6 +45,9 @@ def evaluate_plan(engine, domain_name, specified_instances=[], ignore_existing=F
             if not ignore_existing:
                 evaluations[instance]=prev_evals[instance]
                 total_correct += int(prev_evals[instance]["correct"])
+                total_ever_correct += int(prev_evals[instance]["ever correct"])
+                total_stopped += int(prev_evals[instance]["stopped"])
+                total_stopped_correct += int(prev_evals[instance]["stopped"] and prev_evals[instance]["correct"])
                 total_instances += 1
                 if verbose:
                     print(f"Instance {instance} already evaluated")
@@ -66,19 +72,27 @@ def evaluate_plan(engine, domain_name, specified_instances=[], ignore_existing=F
         except FileNotFoundError:
             print(f"{instance_location} not found. Skipping.")
             continue
-        evaluations[instance] = domain.evaluate(instance_text, output[instance])
+        evaluations[instance] = domain.evaluate(instance_text, output[instance], problem_type)
 
         if verbose:
-            print(f"Correct: {evaluations[instance]['correct']}")
+            print(f"Ever correct: {evaluations[instance]['ever correct']}")
+            print(f"Final correct: {evaluations[instance]['correct']}")
         total_correct += int(evaluations[instance]["correct"])
+        total_ever_correct += int(evaluations[instance]["ever correct"])
+        total_stopped += int(evaluations[instance]["stopped"])
+        total_stopped_correct += int(evaluations[instance]["stopped"] and evaluations[instance]["correct"])
         total_instances += 1
 
         with open(evals_json, 'w') as file:
             json.dump(evaluations, file, indent=4)
     if verbose:
         print(f"Total correct: {total_correct}")
+        print(f"Total ever correct: {total_ever_correct}")
+        print(f"Total stopped: {total_stopped}")
+        print(f"Total stopped correctly: {total_stopped_correct}")
         print(f"Total instances: {total_instances}")
-        print(f"Accuracy: {total_correct/total_instances}")
+        print(f"Ever Accuracy: {total_ever_correct/total_instances}")
+        print(f"Final Accuracy: {total_correct/total_instances}")
         if old_format:
             print(f"Warning: This data contains entries in the old (string) format")
 
