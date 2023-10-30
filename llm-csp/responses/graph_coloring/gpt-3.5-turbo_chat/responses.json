@@ -1,12 +1,6 @@
 {
-    "1": "1: Red\n2: Blue\n3: Green\n4: Red\n5: Blue\n6: Green\n7: Red\n8: Blue\n9: Green\n10: Red\n11: Blue",
-    "2": "0: Red\n1: Blue\n2: Green\n3: Red\n4: Blue\n5: Green\n6: Red\n7: Blue\n8: Red\n9: Green",
-    "3": "0: Red\n1: Blue\n2: Green\n3: Red\n4: Blue\n5: Green\n6: Red\n7: Blue",
-    "4": "0: Red\n1: Blue\n2: Green\n3: Red\n6: Blue\n7: Green\n8: Red\n9: Blue",
-    "5": "0: Red\n1: Blue\n2: Green\n3: Red\n6: Blue\n8: Green\n7: Red\n9: Blue",
-    "6": "0: Red\n1: Blue\n2: Green\n3: Red\n4: Blue\n5: Red\n6: Blue",
-    "7": "0: Red\n1: Blue\n2: Green\n3: Red\n4: Blue",
-    "8": "0: Red\n1: Blue\n2: Green\n3: Yellow\n5: Red\n6: Blue\n7: Green\n9: Yellow",
-    "9": "0: Red\n1: Blue\n2: Green\n3: Red\n4: Blue\n5: Red\n6: Red\n7: Blue",
-    "10": "0: Red\n1: Blue\n2: Green\n3: Red\n4: Blue\n5: Red\n6: Blue\n7: Green\n8: Red\n9: Blue"
+    "1": {
+        "query": "Color the following graph, described as a set of edges, such that no two vertices on the same edge share a color.\nYou may use at most 3 colors.\nVertex 0 is connected to vertex 7.\nVertex 0 is connected to vertex 8.\nVertex 0 is connected to vertex 9.\nVertex 0 is connected to vertex 11.\nVertex 1 is connected to vertex 13.\nVertex 2 is connected to vertex 9.\nVertex 3 is connected to vertex 8.\nVertex 3 is connected to vertex 11.\nVertex 3 is connected to vertex 12.\nVertex 4 is connected to vertex 12.\nVertex 5 is connected to vertex 11.\nVertex 6 is connected to vertex 9.\nVertex 7 is connected to vertex 10.\nVertex 7 is connected to vertex 13.\nVertex 9 is connected to vertex 11.\nVertex 10 is connected to vertex 13.\nVertex 11 is connected to vertex 13.\nThere are a total of 14 vertices. Please label every vertex, even if it is disconnected from the rest of the graph.Please provide each vertex's color. Do not skip any vertices. Each color must be provided on a new line in the response and should be formatted as \"{VERTEX NUMBER}: {VERTEX COLOR ASSIGNMENT}\". Please do not provide anything else in your response.",
+        "response": "0: Red\n1: Blue\n2: Red\n3: Green\n4: Blue\n5: Red\n6: Blue\n7: Red\n8: Blue\n9: Green\n10: Red\n11: Blue\n12: Red\n13: Green"
+    }
 }

@@ -1,0 +1,25 @@
+
+e 0 6
+e 0 8
+e 1 9
+e 1 11
+e 1 12
+e 2 3
+e 2 5
+e 2 7
+e 2 11
+e 3 10
+e 3 11
+e 3 12
+e 4 10
+e 5 7
+e 5 9
+e 5 10
+e 5 11
+e 6 8
+e 6 12
+e 8 9
+e 9 11
+e 9 12
+e 11 12
+c OPTIMAL CHROMATIC NUMBER === 4
