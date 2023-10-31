@@ -59,7 +59,7 @@ def get_responses(engine, domain_name, specified_instances = [], run_till_comple
             if verbose:
                 print(f"Sending query to LLM: Instance {instance}")
             query = input[instance]
-            stop_statement = "[STATEMENT]"
+            stop_statement = "[ANSWER END]"
 
             if backprompting[2:5] == "top":
                 if verbose:
@@ -163,7 +163,7 @@ def check_backprompt(backprompt):
     STOP_PHRASE = "Verifier confirmed success"
     return STOP_PHRASE.lower() in backprompt.lower()
 
-def send_query(query, engine, max_tokens, model=None, stop_statement="[STATEMENT]", top=0, top_num=5):
+def send_query(query, engine, max_tokens, model=None, stop_statement="[ANSWER END]", top=0, top_num=5):
     max_token_err_flag = False
     if engine == 'finetuned':
         if model:
