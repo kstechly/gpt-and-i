@@ -1,0 +1,20 @@
+{
+    "1": {
+        "query": "Use numbers and basic arithmetic operations (+ - * /) to obtain 24. Write your answer first. At the end of your answer, write [ANSWER END]\nInput: 1 1 4 6\nAnswer: ",
+        "response": "((6 / (1 - 1/4)) = 24 [ANSWER END]",
+        "backprompt 0": "Feedback: This is not correct. This expression is malformed. Using the numbers 1 1 4 6 please provide a correct expression that evaluates to 24. Write your answer first. At the end of your answer, write [ANSWER END]\nAnswer: ",
+        "response 0": "((6 / (1 - 1)) * 4 = 24 [ANSWER END]",
+        "backprompt 1": "Feedback: This is not correct. This expression is malformed. Using the numbers 1 1 4 6 please provide a correct expression that evaluates to 24. Write your answer first. At the end of your answer, write [ANSWER END]\nAnswer: ",
+        "response 1": "((6 / (1 / 4)) + 1 = 24 [ANSWER END]",
+        "backprompt 2": "Feedback: This is not correct. This expression is malformed. Using the numbers 1 1 4 6 please provide a correct expression that evaluates to 24. Write your answer first. At the end of your answer, write [ANSWER END]\nAnswer: ",
+        "response 2": "((6 - 1) / 1) * 4 = 24 [ANSWER END]",
+        "backprompt 3": "Feedback: This is not correct. This expression evaluates to 20 instead of 24. Using the numbers 1 1 4 6 please provide a correct expression that evaluates to 24. Write your answer first. At the end of your answer, write [ANSWER END]\nAnswer: ",
+        "response 3": "(6 / (1 / 4)) = 24 [ANSWER END]",
+        "backprompt 4": "Feedback: This is not correct. This expression consists of the numbers 6, 1, 4, but it has to consist of only and exactly ['1', '1', '4', '6']. Using the numbers 1 1 4 6 please provide a correct expression that evaluates to 24. Write your answer first. At the end of your answer, write [ANSWER END]\nAnswer: ",
+        "response 4": "(6 / (1 - 1/4)) = 24 [ANSWER END]",
+        "backprompt 5": "Feedback: This is not correct. This expression evaluates to 8 instead of 24. Using the numbers 1 1 4 6 please provide a correct expression that evaluates to 24. Write your answer first. At the end of your answer, write [ANSWER END]\nAnswer: ",
+        "response 5": "(6 / (1 - 1)) * 4 = 24 [ANSWER END]",
+        "backprompt 6": "Feedback: This is not correct. This expression evaluates to zoo instead of 24. Using the numbers 1 1 4 6 please provide a correct expression that evaluates to 24. Write your answer first. At the end of your answer, write [ANSWER END]\nAnswer: ",
+        "response 6": "(6 / (1 / 4)) * 1 = 24 [ANSWER END]"
+    }
+}
