@@ -6,9 +6,11 @@ import domain_utils
 from domain_utils import *
 import matplotlib.pyplot as plt
 
-def sum_dict(dictionary):
+def sum_dict(dictionary,partition_key="",partition_val=""):
     summed_dictionary = {}
     for key in dictionary:
+        if str(dictionary[key][partition_key])!=partition_val:
+            continue
         for subkey in dictionary[key]:
             try: a = int(dictionary[key][subkey])
             except: continue
@@ -31,10 +33,14 @@ if __name__=="__main__":
     parser.add_argument('-d', '--domain', type=str, required=True, help='Problem domain to evaluate within')
     parser.add_argument('-b', '--backprompting', type=str, default='', help='If backprompting, provide the type of backprompt to pass to the domain. Common types: zero, passfail, full, llm')
     parser.add_argument('-p', '--problem', type=str, default='', help='If doing a domain subproblem, specify it here')
+    parser.add_argument('-k', '--partitionkey', type=str, default='', help='Only get stats for a specific partition. Must use with -v')
+    parser.add_argument('-v', '--partitionval', type=str, default='', help='Only get stats for a specific partition. Must use with -k')
     args = parser.parse_args()
     engine = args.engine
     domain_name = args.domain
     problem_type = args.problem
+    partition_key = args.partitionkey
+    partition_val = args.partitionval
     if domain_name not in domain_utils.domains:
         raise ValueError(f"Domain name must be an element of {list(domain_utils.domains)}.")
     backprompting = args.backprompting
@@ -73,7 +79,10 @@ if __name__=="__main__":
         for x in response_edges_total:
             print(f"{x}: {stats[x]/response_edges_total[x]}")
 
-
+    elif domain_name == "game24":
+        stats = sum_dict(evals,partition_key=partition_key, partition_val=partition_val)
+        print(stats)
+    
     #if domain_name == "graph_coloring":
     if False:
         stats ={}
