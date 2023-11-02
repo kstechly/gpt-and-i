@@ -47,7 +47,10 @@ def get_responses(engine, domain_name, specified_instances = [], run_till_comple
     original_input_n = len(input)
 
     if len(specified_instances) > 0:
-        input = {str(x) : input[str(x)] for x in specified_instances}
+        if ignore_existing:
+            input = {str(x) : input[str(x)] for x in specified_instances}
+        else:
+            input = {str(x) : input[str(x)] for x in specified_instances if x not in prev_output.keys()}
     elif not ignore_existing:
         input = {k: v for k,v in input.items() if k not in prev_output.keys()}
         if verbose:
@@ -121,12 +124,12 @@ def get_responses(engine, domain_name, specified_instances = [], run_till_comple
                             break
                         backprompt = domain.backprompt(instance_text, backprompt, "llm-wrapper")
                     else: backprompt = domain.backprompt(instance_text, llm_response, backprompting)
-                    if verbose:
-                        print(f"Backprompt given: {backprompt}")
                     if check_backprompt(backprompt):
                         if verbose:
                             print(f"Verifier confirmed success.")
                         break
+                    if verbose:
+                        print(f"Backprompt given: {backprompt}")
                     response_trace[f"backprompt {trial}"] = backprompt
                     # NOTE: the following line relies on dictionary ordering, which makes python 3.7+ a requirement
                     query = "\n".join(response_trace.values())
@@ -207,7 +210,7 @@ def send_query(query, engine, max_tokens, model=None, stop_statement="[ANSWER EN
             return choices
         else:
             try:
-                response = openai.ChatCompletion.create(model=eng, messages=messages, temperature=0)
+                response = openai.ChatCompletion.create(model=eng, messages=messages, temperature=0, stop=stop_statement)
             except Exception as e:
                 max_token_err_flag = True
                 print("[-]: Failed GPT3 query execution: {}".format(e))
