@@ -1,0 +1,26 @@
+{
+    "1": {
+        "query": "Use numbers and basic arithmetic operations (+ - * /) to obtain 24.\nInput: 4 4 6 8\nAnswer: (4 + 8) * (6 - 4) = 24\nInput: 1 1 4 6\nAnswer: ",
+        "response 0": "(6 / (1 - 4)) * 1 = 24",
+        "response 1": "(6 / (1 - 1/4)) = 24",
+        "response 2": "(6 / (1 - 1/4)) = 24",
+        "response 3": "(6 / (1 - 1 / 4)) = 24",
+        "response 4": "(4 * 6) * (1 - 1 + 1) = 24"
+    },
+    "2": {
+        "query": "Use numbers and basic arithmetic operations (+ - * /) to obtain 24.\nInput: 4 4 6 8\nAnswer: (4 + 8) * (6 - 4) = 24\nInput: 1 1 11 11\nAnswer: ",
+        "response 0": "(1 + 11) * (1 + 11) = 24\nPlease note that this equation might be incorrect as the correct answer seems to be impossible with the given numbers.",
+        "response 1": "(11 - 1) * (11 - 1) = 24",
+        "response 2": "(11 - 1) * (11 - 1) = 24",
+        "response 3": "(1 + 11) * (1 + 11) = 24\nSorry, I have made a mistake. It is impossible to obtain 24 from 1, 1, 11, 11 using basic arithmetic operations.",
+        "response 4": "(11 - 1) * (11 - 1) = 24"
+    },
+    "3": {
+        "query": "Use numbers and basic arithmetic operations (+ - * /) to obtain 24.\nInput: 4 4 6 8\nAnswer: (4 + 8) * (6 - 4) = 24\nInput: 1 1 3 8\nAnswer: ",
+        "response 0": "(1 + 1 + 3) * 8 = 24",
+        "response 1": "(1 + 3) * (8 - 1) = 24",
+        "response 2": "(8 + 1) * (3 - 1) = 24",
+        "response 3": "(1 + 3) * (8 - 1) = 24",
+        "response 4": "(8 * 3) - (1 + 1) = 24"
+    }
+}

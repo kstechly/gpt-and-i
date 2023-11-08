@@ -1,0 +1,50 @@
+{
+    "1": {
+        "prompts": [
+            "Use numbers and basic arithmetic operations (+ - * /) to obtain 24. Write your answer first. At the end of your answer, write [ANSWER END]\nInput: 1 1 4 6\nAnswer: ",
+            "Use numbers and basic arithmetic operations (+ - * /) to obtain 24. Write your answer first. At the end of your answer, write [ANSWER END]\nInput: 1 1 4 6\nAnswer: ",
+            "Use numbers and basic arithmetic operations (+ - * /) to obtain 24. Write your answer first. At the end of your answer, write [ANSWER END]\nInput: 1 1 4 6\nAnswer: ",
+            "Use numbers and basic arithmetic operations (+ - * /) to obtain 24. Write your answer first. At the end of your answer, write [ANSWER END]\nInput: 1 1 4 6\nAnswer: ",
+            "Use numbers and basic arithmetic operations (+ - * /) to obtain 24. Write your answer first. At the end of your answer, write [ANSWER END]\nInput: 1 1 4 6\nAnswer: ",
+            "Use numbers and basic arithmetic operations (+ - * /) to obtain 24. Write your answer first. At the end of your answer, write [ANSWER END]\nInput: 1 1 4 6\nAnswer: "
+        ],
+        "responses": [
+            [
+                "(6 * 4) - (1 - 1) = 24 [ANSWER END]",
+                "6 * (1 + 4 - 1) = 24 [ANSWER END]",
+                "(1 + 1) * 4 * 6 [ANSWER END]",
+                "(6 - 1) * (4 + 1) [ANSWER END]",
+                "(6 / (1 - 1/4)) [ANSWER END]"
+            ],
+            [
+                "(6 + 1) * (4 - 1) = 21 [ANSWER END]",
+                "6 / (1 - 1/4) [ANSWER END]",
+                "(4 * 6) - (1 + 1) = 24 [ANSWER END]",
+                "(6 / (1 - 1/4)) [ANSWER END]",
+                "(6 - 4) * (1 + 1) [ANSWER END]"
+            ],
+            [
+                "(6 - 1) * (4 + 1) = 24 [ANSWER END]",
+                "(6 / (1 - (1 / 4))) [ANSWER END]",
+                "6 / (1 - (1 / 4))[ANSWER END]",
+                "(6 + 4) * (1 + 1) \n[ANSWER END]",
+                "(6 - 4) * (1 + 1) = 24\n[ANSWER END]"
+            ],
+            [
+                "(1 + 1) * (4 + 6) = 2 * 10 = 20\n20 + 4 = 24\n[ANSWER END]",
+                "(6 - 1) * (4 + 1) = 24 [ANSWER END]",
+                "(6 / (1 - 1/4)) [ANSWER END]",
+                "6 / (1 - (1/4)) [ANSWER END]",
+                "(6 / (1 - 1/4)) * 1 = 24\n[ANSWER END]"
+            ],
+            [
+                "(6 / (1 - (1 / 4))) [ANSWER END]",
+                "6 * 4 - 1 - 1 = 24 [ANSWER END]",
+                "((6 / (1 - 1)) * 4) = 24\n[ANSWER END]",
+                "(6 / (1 - 1 / 4)) [ANSWER END]",
+                "((6 / (1 - 1/4)) * 1) [ANSWER END]"
+            ]
+        ],
+        "stopped": false
+    }
+}
