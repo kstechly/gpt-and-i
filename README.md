@@ -1,5 +1,5 @@
 # GPT-4 CSP Experiments Pipeline
-Codebase related to paper at [NeurIPS 2023 FMDM Workshop](https://sites.google.com/view/fmdm-neurips23/). Preprint can be found [here](https://arxiv.org/abs/2310.12397). For the exact data and pipeline discussed, see [this commit](https://github.com/kstechly/gptcolor/commit/d153e08f8eb1639343471731f80987d08c103bf0).
+Codebase related to paper at [NeurIPS 2023 FMDM Workshop](https://sites.google.com/view/fmdm-neurips23/). Preprint can be found [here](https://arxiv.org/abs/2310.12397). For the exact data and pipeline discussed, see [this branch](https://github.com/kstechly/gptcolor/tree/fmdm_data).
 
 ## Requirements
 - Linux
