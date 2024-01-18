@@ -76,13 +76,14 @@ def evaluate(instance_text, response_trace, problem_type="", backprompt_type="")
         response_eval["eval"] = str(answer)
         response_eval["stopped"] = False
         evaluation.append(response_eval)
-
+    # print(uniques)
     evaluation[-1]["stopped"] = response_trace["stopped"]
     return evaluation
 
 def backprompt(instance_text, instance_output, backprompt_type):
     model_response = instance_output["responses"][-1]
     if backprompt_type == "llm":
+        #free form feedback from the llm
         print(len(instance_output["responses"]))
         if len(instance_output["responses"])%2==0:
             # Return generation prompt for even numbered responses, but first check for the stop phrase
@@ -101,9 +102,47 @@ def backprompt(instance_text, instance_output, backprompt_type):
             backprompt_query+= f"\nIf it is not correct, please give feedback on what is wrong and how to correct it."
             backprompt_query+= '\nRespond only in JSON format as described below:\n{\n   "feedback": "feedback",\n   "correct": boolean}\nEnsure that Python\'s json.loads can parse this.'
             return backprompt_query
+    if backprompt_type == "llm-evaluate":
+        #told to evaluate the number first
+        print(len(instance_output["responses"]))
+        if len(instance_output["responses"])%2==0:
+            # Return generation prompt for even numbered responses, but first check for the stop phrase
+            llm_json = json.loads(model_response)
+            if llm_json["correct"]:
+                return STOP_PHRASE
+            backprompt = concat_trace(instance_output, divisor=2)
+            backprompt += "Feedback: This is not correct.\n"
+            backprompt += f"This expression evaluates to {llm_json['evaluation']}."
+            backprompt += f"\n\nWith this feedback, please try again. {DEFAULT_BACKPROMPT_END(instance_text)}"
+            return backprompt
+        else:
+            # Return checking prompt for odd numbered responses
+            backprompt_query = f"Using each of the numbers {instance_text} exactly as many times as they appear in the list and the basic arithmetic operations (+ - * /), it is possible to write an expression that evaluates to 24. "
+            backprompt_query+= f"Calculate what this expression evaluates to: " +model_response
+            backprompt_query+= f"\nThen check whether it uses exactly and only the numbers provided. If it does, and equals 24, then it is correct."
+            backprompt_query+= '\nRespond only in JSON format as described below:\n{\n   "evaluation": "number the expression evaluated to",\n   "correct": boolean}\nEnsure that Python\'s json.loads can parse this.'
+            return backprompt_query
+    if backprompt_type == "llm-passfail":
+        # Binary LLM feedback
+        print(len(instance_output["responses"]))
+        if len(instance_output["responses"])%2==0:
+            # Return generation prompt for even numbered responses, but first check for the stop phrase
+            llm_json = json.loads(model_response)
+            if llm_json["correct"]:
+                return STOP_PHRASE
+            return f"{concat_trace(instance_output)}Feedback: This is not correct. {DEFAULT_BACKPROMPT_END(instance_text)}"
+        else:
+            # Return checking prompt for odd numbered responses
+            backprompt_query = f"Using each of the numbers {instance_text} exactly as many times as they appear in the list and the basic arithmetic operations (+ - * /), it is possible to write an expression that evaluates to 24. "
+            backprompt_query+= f"Please check if the following expression uses only the correct numbers (and no others) and evaluates to 24: " +model_response
+            backprompt_query+= '\nRespond only in JSON format as described below:\n{\n"correct": boolean}\nEnsure that Python\'s json.loads can parse this.'
+            return backprompt_query
     if backprompt_type == "top":
         # Just do the same initial prompt every time
         return instance_output["prompts"][0]
+    if backprompt_type == "sure":
+        # Just ask "Are you sure?" and repeat the prompt
+        return f"{concat_trace(instance_output)}Feedback: Are you sure? {DEFAULT_BACKPROMPT_END(instance_text)}"
     if backprompt_type == "list-previous":
         # includes a list of all previously tried guesses, no implications of incorrectness
         backprompt = DEFAULT_PROMPT_START
@@ -112,8 +151,7 @@ def backprompt(instance_text, instance_output, backprompt_type):
         backprompt+= "\nAnswer: "
         return backprompt
     check, reason = check_answer(instance_text, model_response)
-    if check:
-        return STOP_PHRASE
+    if check: return STOP_PHRASE
     if backprompt_type == "passfail":
         return f"{concat_trace(instance_output)}Feedback: This is not correct. {DEFAULT_BACKPROMPT_END(instance_text)}"
     elif backprompt_type == "evaluate":

@@ -77,11 +77,15 @@ def get_responses(engine, domain_name, specified_instances = [], run_till_comple
                     if not llm_response:
                         failed_instances.append(instance)
                         print(f"==Failed instance: {instance}==")
-                        continue
+                        break
                     if verbose: print(f"==LLM response: ==\n{llm_response}")
                     instance_output["responses"].append(llm_response)
                 if len(instance_output["prompts"]) == len(instance_output["responses"]):
-                    backprompt_query = domain.backprompt(instance_text, instance_output, multiprompting)
+                    try: backprompt_query = domain.backprompt(instance_text, instance_output, multiprompting)
+                    except: 
+                        failed_instances.append(instance)
+                        print(f"==Failed instance: {instance} (Couldn't generate backprompt)==")
+                        break
                     instance_output["prompts"].append(backprompt_query)
                     if check_backprompt(backprompt_query):
                         instance_output["stopped"] = True
@@ -164,6 +168,7 @@ if __name__=="__main__":
     verbose = args.verbose
     backprompt = args.backprompt
     backprompt_num = args.backprompt_num
+    if not backprompt: backprompt_num = 1
     run_till_completion = eval(args.run_till_completion)
     ignore_existing = args.ignore_existing
     end_number = args.end_number
