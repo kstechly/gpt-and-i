@@ -15,6 +15,7 @@ STOP_STATEMENT = "[ANSWER END]" # what we look for to end LLM response generatio
 
 def get_responses(engine, domain_name, specified_instances = [], run_till_completion=False, ignore_existing=False, verbose=False, multiprompting="", problem_type="", multiprompt_num=15, temp=0):
     domain = domain_utils.domains[domain_name]
+    cost = 0.00
 
     # Check for/set up relevant directories
     instances_dir = f"data/{domain_name}/"
@@ -35,10 +36,15 @@ def get_responses(engine, domain_name, specified_instances = [], run_till_comple
 
     # Load previously done work
     output = {}
-    if os.path.exists(output_json) and not ignore_existing:
+    if os.path.exists(output_json):
         with open(output_json, 'r') as file:
             # NOTE: the following json file should be a dictionary of dictionaries (each representing an instance), each containing three things: prompts (an ordered list of prompts), responses (an ordered list of corresponding responses), and stopped (a boolean of whether generation has been stopped on purpose yet)
             output = json.load(file)
+            if ignore_existing:
+                stamp = str(time.time())
+                with open(f"{output_dir}responses-{stamp}.json","w") as file:
+                    json.dump(output, file, indent=4)
+                    output = {}
     
     # Loop over instances until done
     while True:
@@ -72,13 +78,15 @@ def get_responses(engine, domain_name, specified_instances = [], run_till_comple
             # Loop over the multiprompts until verifier stops or times out
             while len(instance_output["responses"])< multiprompt_num and not instance_output["stopped"]:
                 if len(instance_output["prompts"]) > len(instance_output["responses"]):
-                    if verbose: print(f"==Sending prompt {len(instance_output['prompts'])} to LLM for instance {instance}: ==\n{instance_output['prompts'][-1]}")
+                    if verbose: print(f"==Sending prompt {len(instance_output['prompts'])} of length {len(instance_output['prompts'][-1])} to LLM for instance {instance}==")
+                    cost += len(instance_output['prompts'][-1])*0.00003
                     llm_response = send_query(instance_output["prompts"][-1], engine, MAX_GPT_RESPONSE_LENGTH, stop_statement=STOP_STATEMENT, temp=temp)
                     if not llm_response:
                         failed_instances.append(instance)
                         print(f"==Failed instance: {instance}==")
                         break
                     if verbose: print(f"==LLM response: ==\n{llm_response}")
+                    cost += len(llm_response)*0.00006
                     instance_output["responses"].append(llm_response)
                 if len(instance_output["prompts"]) == len(instance_output["responses"]):
                     try: backprompt_query = domain.backprompt(instance_text, instance_output, multiprompting)
@@ -91,6 +99,7 @@ def get_responses(engine, domain_name, specified_instances = [], run_till_comple
                         instance_output["stopped"] = True
                         if verbose: print(f"==Stopping instance {instance} after {len(instance_output['responses'])} responses.==")
                 output[instance]=instance_output
+                if verbose: print(f"***Current cost: {cost:.2f}***")
                 with open(output_json, 'w') as file:
                     json.dump(output, file, indent=4)
         
@@ -104,6 +113,7 @@ def get_responses(engine, domain_name, specified_instances = [], run_till_comple
                 time.sleep(5)
         else:
             print(f"Failed instances: {failed_instances}")
+            print(f"Total Cost: {cost:.2f}")
             break
 
 def check_backprompt(backprompt):
