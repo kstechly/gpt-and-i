@@ -98,6 +98,7 @@ def get_responses(engine, domain_name, specified_instances = [], run_till_comple
                     if check_backprompt(backprompt_query):
                         instance_output["stopped"] = True
                         if verbose: print(f"==Stopping instance {instance} after {len(instance_output['responses'])} responses.==")
+                        break
                 output[instance]=instance_output
                 if verbose: print(f"***Current cost: {cost:.2f}***")
                 with open(output_json, 'w') as file:
