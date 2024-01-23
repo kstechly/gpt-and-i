@@ -21,8 +21,9 @@ def check_answer(instance_text, equation):
     expression = equation.strip().split('\n')[0].lower().split('=')[0]
     numbers = re.findall(r'\d+', expression)
     if sorted(numbers) != sorted(input_nums): return False, f"This expression consists of the numbers {', '.join(numbers)}, but it has to consist of only and exactly {input_nums}."
+    expression = fix_expression(expression)
     try: return sympy.simplify(expression) == 24, f"This expression evaluates to {sympy.simplify(expression)} instead of 24."
-    except: return False, "This expression is malformed."
+    except: return False, "This expression is malformed." #NOTE: this will reject expressions that could be fixed by just appending a close parens
     
 def concat_trace(instance_output, divisor = 1):
     prompts = instance_output["prompts"]
@@ -42,6 +43,24 @@ def list_previous(instance_output, evaluate=False):
         prev_list+="\n"
     return prev_list
 
+def fix_expression(expression): # hand-crafted fixes for rare LLM outputs that don't play nice with sympy 
+    expression = expression.replace("x","*")
+    expression = expression.replace("÷","/")
+    expression = expression.replace("×","*")
+    expression = expression.replace("[","(")
+    expression = expression.replace("]",")")
+    return expression
+
+def simplify_with_error(expression):
+    expression = fix_expression(expression)
+    try: simplified = sympy.simplify(expression)
+    except:
+        try: simplified = sympy.simplify(f"{expression})")
+        except:
+            print(f"Can't simplify {expression}")
+            simplified = expression
+    return simplified
+
 #### Required Functions
 
 def file_ending():
@@ -53,38 +72,57 @@ def generate(instance_text, problem_type):
     return prompt
 
 def evaluate(instance_text, response_trace, problem_type="", backprompt_type=""):
-    evaluation = []
-    uniques = []
-    input_nums = instance_text.split(" ")
-    responses = response_trace["responses"] #list of responses as strings
+    evaluation = {}
 
-    if backprompt_type=="llm":
-        # rejigger responses so that it only contains solver responses
-        raise NotImplementedError
-    
-    for response in responses:
-        response_eval = {}
-        response_eval["unique"] = False
-        expression = response.strip().split('\n')[0].lower().split('=')[0].lower().replace(' ','')
-        response_eval["expression"] = expression
-        if expression not in uniques:
-            response_eval["unique"] = True 
-            uniques.append(expression)
-        response_eval["correct"],_ = check_answer(instance_text, response)
-        try: answer = sympy.simplify(expression)
-        except: answer = "malformed"
-        response_eval["eval"] = str(answer)
-        response_eval["stopped"] = False
-        evaluation.append(response_eval)
-    # print(uniques)
-    evaluation[-1]["stopped"] = response_trace["stopped"]
+    responses = response_trace["responses"]
+    token_cost = sum(map(len, responses))
+    prompts = response_trace["prompts"][:len(responses)] # deals with extra appended (but unsent) prompts
+    token_cost += sum(map(len, prompts))
+    evaluation["token cost"]= token_cost
+    if "llm" in backprompt_type: responses = responses[::2]
+    responses_correct = [check_answer(instance_text,x)[0] for x in responses]
+    evaluation["correct"] = responses_correct[-1]
+    evaluation["ever corrects"] = sum(responses_correct)
+    evaluation["ever correct"] = True in responses_correct
+    evaluation["false negatives"]= sum(responses_correct[:-1])
+    evaluation["num prompts"] = len(prompts)
+    responses = list(map(lambda x: x.replace(" ",""), responses))
+    evaluation["num unique responses"] = len(set(responses))
+    responses_evals = list(map(lambda x: simplify_with_error(x.strip().split('\n')[0].lower().split('=')[0]), responses))
+    evaluation["num unique evaluations"] = len(set(responses_evals))
+
     return evaluation
+    # evaluation = []
+    # uniques = []
+    # input_nums = instance_text.split(" ")
+    # responses = response_trace["responses"] #list of responses as strings
+
+    # if backprompt_type=="llm":
+    #     # rejigger responses so that it only contains solver responses
+    #     raise NotImplementedError
+    
+    # for response in responses:
+    #     response_eval = {}
+    #     response_eval["unique"] = False
+    #     expression = response.strip().split('\n')[0].lower().split('=')[0].lower().replace(' ','')
+    #     response_eval["expression"] = expression
+    #     if expression not in uniques:
+    #         response_eval["unique"] = True 
+    #         uniques.append(expression)
+    #     response_eval["correct"],_ = check_answer(instance_text, response)
+    #     try: answer = sympy.simplify(expression)
+    #     except: answer = "malformed"
+    #     response_eval["eval"] = str(answer)
+    #     response_eval["stopped"] = False
+    #     evaluation.append(response_eval)
+    # # print(uniques)
+    # evaluation[-1]["stopped"] = response_trace["stopped"]
+    # return evaluation
 
 def backprompt(instance_text, instance_output, backprompt_type):
     model_response = instance_output["responses"][-1]
     if backprompt_type == "llm":
         #free form feedback from the llm
-        print(len(instance_output["responses"]))
         if len(instance_output["responses"])%2==0:
             # Return generation prompt for even numbered responses, but first check for the stop phrase
             llm_json = json.loads(model_response)
@@ -104,7 +142,6 @@ def backprompt(instance_text, instance_output, backprompt_type):
             return backprompt_query
     if backprompt_type == "llm-evaluate":
         #told to evaluate the number first
-        print(len(instance_output["responses"]))
         if len(instance_output["responses"])%2==0:
             # Return generation prompt for even numbered responses, but first check for the stop phrase
             llm_json = json.loads(model_response)
@@ -124,13 +161,12 @@ def backprompt(instance_text, instance_output, backprompt_type):
             return backprompt_query
     if backprompt_type == "llm-passfail":
         # Binary LLM feedback
-        print(len(instance_output["responses"]))
         if len(instance_output["responses"])%2==0:
             # Return generation prompt for even numbered responses, but first check for the stop phrase
             llm_json = json.loads(model_response)
             if llm_json["correct"]:
                 return STOP_PHRASE
-            return f"{concat_trace(instance_output)}Feedback: This is not correct. {DEFAULT_BACKPROMPT_END(instance_text)}"
+            return f"{concat_trace(instance_output, divisor=2)}Feedback: This is not correct. {DEFAULT_BACKPROMPT_END(instance_text)}"
         else:
             # Return checking prompt for odd numbered responses
             backprompt_query = f"Using each of the numbers {instance_text} exactly as many times as they appear in the list and the basic arithmetic operations (+ - * /), it is possible to write an expression that evaluates to 24. "
