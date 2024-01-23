@@ -7,6 +7,8 @@ from tqdm import tqdm
 import openai
 import domain_utils
 from domain_utils import *
+from transformers import AutoTokenizer, AutoModelForCausalLM, AutoModel, StoppingCriteriaList, StoppingCriteria
+from huggingface_hub import login
 
 MAX_GPT_RESPONSE_LENGTH = 100
 MAX_BACKPROMPT_LENGTH = 15
@@ -26,6 +28,15 @@ def get_responses(engine, domain_name, specified_instances = [], run_till_comple
     os.makedirs(output_dir, exist_ok=True)
     output_json = output_dir+"responses.json"
     
+    #Load model if needed
+    if engine == 'llama2_70b':
+        model = get_llama2_70b()
+    elif engine == 'llama2_13b':
+        model = get_llama2_13b()
+    else:
+        model = None
+    
+
     # Load prompts
     with open(prompt_dir+f"prompts{f'-{problem_type}' if problem_type else ''}.json", 'r') as file:
         input = json.load(file)
@@ -80,7 +91,7 @@ def get_responses(engine, domain_name, specified_instances = [], run_till_comple
                 if len(instance_output["prompts"]) > len(instance_output["responses"]):
                     if verbose: print(f"==Sending prompt {len(instance_output['prompts'])} of length {len(instance_output['prompts'][-1])} to LLM for instance {instance}==")
                     cost += len(instance_output['prompts'][-1])*0.00003
-                    llm_response = send_query(instance_output["prompts"][-1], engine, MAX_GPT_RESPONSE_LENGTH, stop_statement=STOP_STATEMENT, temp=temp)
+                    llm_response = send_query(instance_output["prompts"][-1], engine, MAX_GPT_RESPONSE_LENGTH, stop_statement=STOP_STATEMENT, temp=temp, model=model)
                     if not llm_response:
                         failed_instances.append(instance)
                         print(f"==Failed instance: {instance}==")
@@ -88,7 +99,7 @@ def get_responses(engine, domain_name, specified_instances = [], run_till_comple
                     if verbose: print(f"==LLM response: ==\n{llm_response}")
                     cost += len(llm_response)*0.00006
                     instance_output["responses"].append(llm_response)
-                if len(instance_output["prompts"]) == len(instance_output["responses"]):
+                if len(instance_output["prompts"]) == len(instance_output["responses"]) and multiprompting:
                     try: backprompt_query = domain.backprompt(instance_text, instance_output, multiprompting)
                     except: 
                         failed_instances.append(instance)
@@ -120,7 +131,36 @@ def get_responses(engine, domain_name, specified_instances = [], run_till_comple
 def check_backprompt(backprompt):
     return STOP_PHRASE.lower() in backprompt.lower()
 
-def send_query(query, engine, max_tokens, stop_statement="[ANSWER END]", temp=0, top_num=5):
+def get_llama2_70b():
+        max_memory_mapping = {0: '19.0GB', 1: "19.0GB", 2: "19.0GB", 3: "19.0GB", 4: "19.0GB", 5: "19.0GB", 6: "43.0GB", 7: "43.0GB"}
+        #Change the cache dir for your own env
+        cache_dir = os.getenv('LLAMA2_CACHE_DIR', '/data/karthik/LLM_models/llama2_70b/')
+        tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-2-70b-hf")
+        model = AutoModelForCausalLM.from_pretrained("meta-llama/Llama-2-70b-hf", cache_dir=cache_dir,
+                                                     local_files_only=False, load_in_8bit=True, device_map='auto',
+                                                     max_memory=max_memory_mapping)
+        return {'model': model, 'tokenizer': tokenizer}
+
+def get_llama2_13b():
+        max_memory_mapping = {0: '43.0GB', 1: "43.0GB", 2: "43.0GB", 3: "43.0GB", 4: "43.0GB", 5: "43.0GB"}
+        #Change the cache dir for your own env
+        cache_dir = os.getenv('LLAMA2_CACHE_DIR', '/data/karthik/LLM_models/llama2_13b/')
+        tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-2-13b-hf")
+        model = AutoModelForCausalLM.from_pretrained("meta-llama/Llama-2-13b-hf", cache_dir=cache_dir,
+                                                     local_files_only=False, load_in_8bit=True, device_map='auto',
+                                                     max_memory=max_memory_mapping)
+        return {'model': model, 'tokenizer': tokenizer}
+
+def generate_from_huggingfaceLLM(model, tokenizer, query, max_tokens, stop_statement="[PLAN END]"):
+    encoded_input = tokenizer(query, return_tensors='pt')
+    stop = tokenizer(stop_statement, return_tensors='pt')
+    stoplist = StoppingCriteriaList([stop])
+    output_sequences = model.generate(input_ids=encoded_input['input_ids'].cuda(), max_new_tokens=max_tokens,
+                                      temperature=0.001, top_p=1)
+    return tokenizer.decode(output_sequences[0], skip_special_tokes=True)
+
+
+def send_query(query, engine, max_tokens, stop_statement="[ANSWER END]", temp=0, top_num=5, model=None):
     max_token_err_flag = False
     if '_chat' in engine:
         eng = engine.split('_')[0]
@@ -136,6 +176,14 @@ def send_query(query, engine, max_tokens, stop_statement="[ANSWER END]", temp=0,
             print("[-]: Failed GPT query execution: {}".format(e))
         text_response = response['choices'][0]['message']['content'] if not max_token_err_flag else ""
         return text_response.strip()        
+    elif 'llama' in engine:
+        if model:
+            response = generate_from_huggingfaceLLM(model['model'], model['tokenizer'], query, max_tokens, stop_statement=stop_statement)
+            response = response.replace(query, '')
+            response = response.replace('<s>', '')
+            return response.strip()
+        else:
+            assert model is not None
     else:
         try:
             response = openai.Completion.create(
@@ -192,4 +240,11 @@ if __name__=="__main__":
         specified_instances = list(range(start_number,end_number+1))
         print(f"Running instances from {start_number} to {end_number}")
     print(f"Engine: {engine}, Domain: {domain_name}, Verbose: {verbose}, Run till completion: {run_till_completion}, Multiprompt Type: {backprompt}, Problem Type: {problem_type}")
+    
+    # HuggingFace parameters
+    os.environ["TOKENIZERS_PARALLELISM"] = "false"
+    #get environment variable huggingface_token
+    token = os.environ["HF_TOKEN"]
+    login(token=token)
+    
     get_responses(engine, domain_name, specified_instances, run_till_completion, ignore_existing, verbose, backprompt, problem_type, multiprompt_num=backprompt_num, temp=temperature)
