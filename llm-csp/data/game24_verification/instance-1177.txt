@@ -1,0 +1,5 @@
+5 6 9 13
+correct ((5-13)*(6-9))
+ablated_op ((5*13)*(6-9))
+ablated_number ((2-13)*(6-9))
+random (((9-5)+13)-6)

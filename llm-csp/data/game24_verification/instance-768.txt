@@ -1,0 +1,5 @@
+2 2 5 6
+correct (6*(5-(2/2)))
+ablated_op (6*(5/(2/2)))
+ablated_number (6*(5-(10/2)))
+random (((5+6)*2)-2)

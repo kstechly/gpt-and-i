@@ -1,0 +1,5 @@
+2 2 3 11
+correct (2*(11-(2-3)))
+ablated_op (2+(11-(2-3)))
+ablated_number (2*(9-(2-3)))
+random (((3+2)*2)+11)

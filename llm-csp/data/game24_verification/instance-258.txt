@@ -1,0 +1,5 @@
+1 6 7 11
+correct ((1*6)+(7+11))
+ablated_op ((1-6)+(7+11))
+ablated_number ((1*8)+(7+11))
+random (((11/7)+6)+1)

@@ -1,0 +1,5 @@
+3 6 6 10
+correct ((10*(6-3))-6)
+ablated_op ((10/(6-3))-6)
+ablated_number ((10*(6-6))-6)
+random (((6-3)/10)*6)

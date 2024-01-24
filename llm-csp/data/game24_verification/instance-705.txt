@@ -1,0 +1,5 @@
+1 4 9 10
+correct ((1+4)+(9+10))
+ablated_op ((1/4)+(9+10))
+ablated_number ((1+4)+(9+11))
+random (((9+10)/1)+4)

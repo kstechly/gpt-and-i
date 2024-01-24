@@ -1,0 +1,5 @@
+2 5 8 9
+correct ((2+5)+(8+9))
+ablated_op ((2*5)+(8+9))
+ablated_number ((2+1)+(8+9))
+random (((2+5)/8)/9)

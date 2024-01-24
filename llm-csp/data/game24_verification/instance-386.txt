@@ -1,0 +1,5 @@
+1 8 8 11
+correct ((1*8)*(11-8))
+ablated_op ((1*8)*(11/8))
+ablated_number ((8*8)*(11-8))
+random (((1/8)/11)*8)

@@ -1,0 +1,5 @@
+4 4 7 7
+correct (7*(4-(4/7)))
+ablated_op (7*(4/(4/7)))
+ablated_number (7*(1-(4/7)))
+random (((7-4)*4)/7)

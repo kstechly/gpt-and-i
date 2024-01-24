@@ -1,0 +1,5 @@
+2 2 5 10
+correct (10+(2*(2+5)))
+ablated_op (10*(2*(2+5)))
+ablated_number (5+(2*(2+5)))
+random (((5-2)/2)-10)

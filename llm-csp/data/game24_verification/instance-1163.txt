@@ -1,0 +1,5 @@
+7 7 7 12
+correct ((7+7)/(7/12))
+ablated_op ((7*7)/(7/12))
+ablated_number ((5+7)/(7/12))
+random (((7-12)-7)+7)

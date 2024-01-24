@@ -1,0 +1,5 @@
+1 3 4 13
+correct (3*(13-(1+4)))
+ablated_op (3+(13-(1+4)))
+ablated_number (5*(13-(1+4)))
+random (((4*13)*1)+3)

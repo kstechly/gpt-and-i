@@ -1,0 +1,5 @@
+3 6 8 10
+correct (3*(10+(6-8)))
+ablated_op (3*(10+(6+8)))
+ablated_number (3*(10+(1-8)))
+random (((10+3)-6)-8)

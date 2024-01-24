@@ -1,0 +1,5 @@
+2 3 3 9
+correct (9+(3*(2+3)))
+ablated_op (9+(3/(2+3)))
+ablated_number (9+(3*(4+3)))
+random (((3/9)-3)-2)

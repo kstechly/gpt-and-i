@@ -1,0 +1,5 @@
+2 4 6 9
+correct ((2*4)*(9-6))
+ablated_op ((2*4)*(9*6))
+ablated_number ((2*11)*(9-6))
+random (((2*6)-9)-4)

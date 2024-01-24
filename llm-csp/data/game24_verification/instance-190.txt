@@ -1,0 +1,5 @@
+1 3 9 12
+correct ((1*3)+(9+12))
+ablated_op ((1*3)-(9+12))
+ablated_number ((1*3)+(9+8))
+random (((1-3)+9)/12)

@@ -1,0 +1,5 @@
+4 4 4 10
+correct ((4*10)-(4*4))
+ablated_op ((4/10)-(4*4))
+ablated_number ((3*10)-(4*4))
+random (((4*4)+10)*4)

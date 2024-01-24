@@ -1,0 +1,5 @@
+3 6 8 13
+correct ((8+13)-(3-6))
+ablated_op ((8+13)+(3-6))
+ablated_number ((8+13)-(3-9))
+random (((13-6)/8)-3)

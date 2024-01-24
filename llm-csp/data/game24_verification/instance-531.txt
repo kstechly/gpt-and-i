@@ -1,0 +1,5 @@
+1 5 5 6
+correct ((5*6)-(1+5))
+ablated_op ((5*6)-(1*5))
+ablated_number ((5*7)-(1+5))
+random (((1+5)-5)-6)

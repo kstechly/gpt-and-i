@@ -1,0 +1,5 @@
+4 4 5 13
+correct ((4*4)-(5-13))
+ablated_op ((4/4)-(5-13))
+ablated_number ((3*4)-(5-13))
+random (((4/5)+13)*4)

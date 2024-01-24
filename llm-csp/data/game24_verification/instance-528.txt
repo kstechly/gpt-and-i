@@ -1,0 +1,5 @@
+4 7 9 9
+correct (4*(7-(9/9)))
+ablated_op (4+(7-(9/9)))
+ablated_number (4*(9-(9/9)))
+random (((9/4)+9)+7)

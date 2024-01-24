@@ -1,0 +1,5 @@
+1 2 6 11
+correct ((1+11)+(2*6))
+ablated_op ((1-11)+(2*6))
+ablated_number ((1+2)+(2*6))
+random (((11*2)*1)-6)

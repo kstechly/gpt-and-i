@@ -1,0 +1,5 @@
+3 3 3 12
+correct ((3*3)+(3+12))
+ablated_op ((3/3)+(3+12))
+ablated_number ((2*3)+(3+12))
+random (((3/12)/3)*3)

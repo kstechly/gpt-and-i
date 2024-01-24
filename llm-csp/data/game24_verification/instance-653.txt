@@ -1,0 +1,5 @@
+4 5 9 10
+correct ((4-10)*(5-9))
+ablated_op ((4-10)/(5-9))
+ablated_number ((4-2)*(5-9))
+random (((4-9)*10)+5)
