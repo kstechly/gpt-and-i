@@ -15,7 +15,7 @@ MAX_BACKPROMPT_LENGTH = 15
 STOP_PHRASE = "Verifier confirmed success" # what the verifier has to say
 STOP_STATEMENT = "[ANSWER END]" # what we look for to end LLM response generation
 
-def get_responses(engine, domain_name, specified_instances = [], run_till_completion=False, ignore_existing=False, verbose=False, multiprompting="", problem_type="", multiprompt_num=15, temp=0):
+def get_responses(engine, domain_name, specified_instances = [], run_till_completion=False, ignore_existing=False, verbose=False, multiprompting="", problem_type="", multiprompt_num=15, temp=0, model=None):
     domain = domain_utils.domains[domain_name]
     cost = 0.00
 
@@ -28,15 +28,6 @@ def get_responses(engine, domain_name, specified_instances = [], run_till_comple
     os.makedirs(output_dir, exist_ok=True)
     output_json = output_dir+"responses.json"
     
-    #Load model if needed
-    if engine == 'llama2_70b':
-        model = get_llama2_70b()
-    elif engine == 'llama2_13b':
-        model = get_llama2_13b()
-    else:
-        model = None
-    
-
     # Load prompts
     with open(prompt_dir+f"prompts{f'-{problem_type}' if problem_type else ''}.json", 'r') as file:
         input = json.load(file)
@@ -246,5 +237,12 @@ if __name__=="__main__":
     #get environment variable huggingface_token
     token = os.environ["HF_TOKEN"]
     login(token=token)
-    
-    get_responses(engine, domain_name, specified_instances, run_till_completion, ignore_existing, verbose, backprompt, problem_type, multiprompt_num=backprompt_num, temp=temperature)
+    #Load model if needed
+    if engine == 'llama2_70b':
+        model = get_llama2_70b()
+    elif engine == 'llama2_13b':
+        model = get_llama2_13b()
+    else:
+        model = None
+
+    get_responses(engine, domain_name, specified_instances, run_till_completion, ignore_existing, verbose, backprompt, problem_type, multiprompt_num=backprompt_num, temp=temperature, model=model)
