@@ -232,6 +232,7 @@ if __name__=="__main__":
         print(f"Running instances from {start_number} to {end_number}")
     print(f"Engine: {engine}, Domain: {domain_name}, Verbose: {verbose}, Run till completion: {run_till_completion}, Multiprompt Type: {backprompt}, Problem Type: {problem_type}")
     
+    model = None
     if 'llama' in engine:
         # HuggingFace parameters
         os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -243,7 +244,5 @@ if __name__=="__main__":
             model = get_llama2_70b()
         elif engine == 'llama2_13b':
             model = get_llama2_13b()
-        else:
-            model = None
 
     get_responses(engine, domain_name, specified_instances, run_till_completion, ignore_existing, verbose, backprompt, problem_type, multiprompt_num=backprompt_num, temp=temperature, model=model)
