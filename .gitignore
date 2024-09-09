@@ -2,3 +2,5 @@
 *.pyc
 old_runs/
 *.sh
+*-old_format*
+
