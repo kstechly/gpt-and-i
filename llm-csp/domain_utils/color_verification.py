@@ -20,6 +20,12 @@ def file_ending():
 
 def generate(instance_text, problem_type):
     # format (stored in data/color_verification) is graph instance with comments appended giving colorings of various types
+    if "-cot" in problem_type:
+        problem_type = problem_type.split("-cot")[0]
+        if problem_type not in instance_text:
+            print(f"There is no {problem_type} key in {instance_text}")
+        coloring_text = instance_text.split(f"c {problem_type}")[1].split("\n")[0].replace("\\n","\n")
+        return generate_cot_prompt(instance_text)
     if problem_type not in instance_text:
         print(f"There is no {problem_type} key in {instance_text}")
     coloring_text = instance_text.split(f"c {problem_type}")[1].split("\n")[0].replace("\\n","\n")
@@ -30,157 +36,47 @@ def generate(instance_text, problem_type):
     prompt+= f"\nIf it is, say '{graph_coloring.STOP_PHRASE}' Do not provide anything else in your response. If it is incorrect, please point out which same-color vertices share an edge. If there are none, but it uses too many colors say '{NON_OPT_PHRASE}' Do not provide anything else in your response. If the color of a vertex is not given in the coloring, say '{MISSING_PHRASE}' Do not provide anything else in your response."
     return prompt
 
-def evaluate(instance_text, response_trace, problem_type=""):
-    #TODO
-    # .lower().replace(".","")
-    evaluation = {}
+def generate_cot_prompt(instance_text, coloring_text):
+    prompt = ''
+    prompt+= '\n[Instructions]\nWhen outputting your final answer, first print the [Answer] tag, then put your final answer after the [Answer] tag. Respond only in the following format:\nWrong Edges: a list of incorrect edges\nAll Vertices Colored: boolean representing if every vertex is colored\nOptimal Or Less: boolean representing if the number of colors is no more than the optimal\nCorrect: boolean'
+    prompt+= f"\n\n[Graph]\nThe following graph, described as a set of edges, has an optimal coloring number of {graph_coloring.optimal_coloring_number(instance_text)}:\n"
+    _, graph_text = graph_coloring.generate_graph(instance_text)
+    prompt+= graph_text
+    prompt+= f"\n[Coloring]\nA coloring is correct if no adjacent vertices are the same color and the total number of colors used is no more than the optimal coloring number. Please check if this coloring is correct: {coloring_text}"
+    prompt+= f"\n\nLet's think step by step. Remember to output your final answer in the format described in the instructions.\n[Thoughts]"
+    return prompt
+
+def evaluate(instance_text, response_trace, problem_type="", backprompt_type=""):
     STOP_PHRASE = graph_coloring.STOP_PHRASE
-    response = response_trace["response"]
-    coloring_text = instance_text.split(problem_type)[1].split("\n")[0].replace("\\n","\n").strip()
+    evaluation = {"num prompts": 1}
+    coloring_text = instance_text.split(problem_type.split('-cot')[0])[1].split("\n")[0].replace("\\n","\n").strip()
+    if "-cot" in problem_type:
+        messy_json = parse_messy_json(response_trace["responses"][-1])
+        claim = messy_json['correct']
+    else: claim = STOP_PHRASE in response_trace["responses"][-1]
+    ground_truth = graph_coloring.check_coloring(coloring_text, instance_text.split('c correct')[0])
+    evaluation["correct"] = ground_truth[0] is claim
+    evaluation["ground truth"] = ground_truth[0]
+    evaluation["TP"] = ground_truth[0] and claim
+    evaluation["FN"] = ground_truth[0] and not claim
+    evaluation["TN"] = not ground_truth[0] and not claim
+    evaluation["FP"] = not ground_truth[0] and claim
+    evaluation["output token cost"] = len(response_trace["responses"][-1])
+    evaluation["input token cost"] = len(response_trace["prompts"][-1])
+    return [evaluation]
 
-    fake_trace = {"response":coloring_text}
-    coloring_evaluation = graph_coloring.evaluate(instance_text, fake_trace)
-    evaluation["coloring evaluation"] = coloring_evaluation
-
-    edges = graph_coloring.parse_dimacs(instance_text)
-
-    coloring = {}
-    for line in coloring_text.split("\n"):
-        assignment = line.strip().split(": ")
-        if len(assignment) < 2:
-            continue
-        vertex_number = assignment[0]
-        color = assignment[1]
-        coloring[vertex_number] = color
-
-    #I HAVE TO KNOW WHICH TYPE IT WAS?? or pass the right instance
-
-    # check for one of the key phrases first, THEN
-    # separate into sentences. loop over them
-    # extract "color n" substrings, all other contiguous digits should be separate vertices
-    # except INSTANCE 74, which went crazy
-    # this is a typology of errors
-    # hallucinations: edges, colors
-    evaluation["correct"] = False
-    evaluation["ever correct"] = False
-    evaluation["stopped"] = False
-    evaluation["stopped correctly"] = False
-    evaluation["non-opted"] = False
-    evaluation["non-opted correctly"] = False
-    evaluation["missinged"] = False
-    evaluation["missinged correctly"] = False
-    evaluation["malformed"] = False
-    evaluation["confused edge"] = False
-    evaluation["edge hallucination"] = 0
-    evaluation["vertex color hallucination"] = 0
-    evaluation["colorless edges"] = 0
-    evaluation["number of edges mentioned"] = 0
-    if STOP_PHRASE.lower().replace(".","") in response.lower():
-        evaluation["stopped"] = True
-        if coloring_evaluation["correct"]:
-            evaluation["stopped correctly"] = True
-            evaluation["correct"] = True
-    elif NON_OPT_PHRASE.lower().replace(".","") in response.lower():
-        evaluation["non-opted"] = True
-        if coloring_evaluation["full coloring"] and not coloring_evaluation["correct"]:
-            evaluation["non-opted correctly"] = True
-            evaluation["correct"] = True
-    elif MISSING_PHRASE.lower().replace(".","") in response.lower():
-        evaluation["missinged"] = True
-        if not coloring_evaluation["valid assignment"]:
-            evaluation["missinged correctly"] = True
-            evaluation["correct"] = True
-    else:
-        if not coloring_evaluation["correct"] and not coloring_evaluation["full coloring"] and not coloring_evaluation["valid assignment"]:
-            evaluation["correct"] = True
-        for sentence in response.split("."):
-            if not sentence:
-                continue
-            color_number = None
-            vert1_color = None
-            vert2_color = None
-            #check for malformed prompts
-            if len(sentence.split("vert"))>3:
-                if "This coloring is incorrect due" in sentence:
-                    sentence = sentence.split("This coloring is incorrect due")[1]
-                    print(f"funky split on {sentence}")
-                else:
-                    evaluation["malformed"] = True
-                    print(f"malformed: {sentence}")
-            else:
-                #extract color
-                #check for next sentence being "both are color n."
-                color_substrings = sentence.lower().split('color')
-                cleaned_color_substrings = [color_substrings[0]]
-                if len(color_substrings)>1 and "same-color" not in sentence.lower():
-                    color_substrings = color_substrings[1:]
-                    #print(color_substrings)
-                    for x in color_substrings:
-                        y = re.search(r'(\d+)', x)
-                        if y:
-                            if color_number is not None and color_number is not y.group():
-                                evaluation["confused edge"] = True
-                                vert1_color = color_number
-                                vert2_color = y.group()
-                                #TODO check for this later when computing if it recognized the colors right
-                            color_number = y.group()
-                            if len(x.split(y.group(),1))>1:
-                                cleaned_color_substrings.append(" ".join(x.split(y.group(),1)[1:]))
-                        else: 
-                            cleaned_color_substrings.append(x)
-                    #print(f"Extracted color number: {color_number} from {sentence}")
-                    if vert1_color is None:
-                        vert1_color = color_number
-                        vert2_color = color_number
-                else:
-                    #TODO check for next sentence "both are color n." case
-                    print(f"colorless: {sentence}")
-                #extract edge
-                cleaned_sentence = " ".join(cleaned_color_substrings).lower()
-                #print(sentence)
-
-                #print(f"cleaned: {cleaned_sentence}")
-                vertex_r = re.findall(r'\d+', cleaned_sentence)
-                vertex_pair = list(vertex_r)
-                if len(vertex_pair)==1:
-                    if vert1_color is None:
-                        evaluation["colorless edges"] +=1
-                        print(f"no color: {sentence}")
-                    elif vert1_color not in coloring[vertex_pair[0]]:
-                        evaluation["vertex color hallucination"]+=1
-                elif vertex_pair:
-                    evaluation["number of edges mentioned"]+=1
-                    #check if this edge exists
-                    if vertex_pair not in edges:
-                        evaluation["edge hallucination"] +=1
-                    #check if verts are colored right
-                    if vert1_color is None:
-                        evaluation["colorless edges"] +=1
-                        print(f"no color: {sentence}")
-                    elif vert1_color not in coloring[vertex_pair[0]] or vert2_color not in coloring[vertex_pair[1]]:
-                        evaluation["vertex color hallucination"] +=1
-
-                #
-                #compare edge
-                #
-                #calculate a list of most connected vertices
-                #calculate where in that list the verts from the edge fall
-                #calculate the connectivity of each vert in edge
-
-        #one weighting: per response
-        #another: per occurrence
-        
-        
-
-
-
-        #stats I want:
-        # is it the first edge?
-        # does the edge even exist?
-        # does it find a false missing assignment?
-
-    #TODO
-    return evaluation
+def parse_messy_json(response_raw):
+    try: response = response_raw.split("[Answer]")[1].lower()
+    except: 
+        try: response = response_raw.split("final answer is:")[1].lower()
+        except: raise ValueError(response_raw)
+    # print(response)
+    wrong_edges = response.split('wrong edges:')[1].split('\n')[0].strip().replace("(","[").replace(")","]")
+    all_verts = response.split('all vertices colored:')[1].split('\n')[0].strip()
+    optimal_or_less = response.split('optimal or less:')[1].split('\n')[0].strip()
+    correct = response.split('correct:')[1].split('\n')[0].strip()
+    messy_json_string = '{"wrong_edges": '+wrong_edges+', "all_verts":'+all_verts+', "opt":'+optimal_or_less+', "correct":'+correct+'}'
+    return json.loads(messy_json_string)
 
 def backprompt(instance_text, model_response, backprompt_type):
     raise NotImplementedError("No backprompting for color verification")

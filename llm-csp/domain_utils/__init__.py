@@ -1,7 +1,7 @@
 # To add a new domain, create a module in this subfolder, and then add it to the following:
-from domain_utils import random_sat, graph_coloring, color_verification, game24, game24_verification
-__all__ = ["random_sat","graph_coloring","color_verification", "game24", "game24_verification"]
-domains = {"random_sat":random_sat,"graph_coloring":graph_coloring,"color_verification":color_verification, "game24":game24, "game24_verification":game24_verification}
+from domain_utils import graph_coloring, color_verification, game24, game24_verification
+__all__ = ["graph_coloring","color_verification", "game24", "game24_verification"]
+domains = {"graph_coloring":graph_coloring,"color_verification":color_verification, "game24":game24, "game24_verification":game24_verification}
 
 # A domain module must contain three functions:
 #   1. file_ending: None -> str

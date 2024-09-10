@@ -3,6 +3,7 @@ import csv
 import re
 import sympy
 import json
+from pprint import pprint
 
 CSV_LOCATION = "../data/game24/24.csv"
 GAME24_DIRECTORY = "../data/game24/"
@@ -10,14 +11,14 @@ GAME24_DIRECTORY = "../data/game24/"
 END_TAG = "[ANSWER END]"
 DEFAULT_PROMPT_START = f"Use numbers and basic arithmetic operations (+ - * /) to obtain 24. You must write your response. Write your answer first, followed by {END_TAG}\n"
 # \nInput: 4 4 6 8\nAnswer: (4 + 8) * (6 - 4) = 24
-STOP_PHRASE = "Verifier confirmed success."
+STOP_PHRASE = "stop10002"
 STOP_PHRASE_MASK = "Twenty-four achieved"
 
 def DEFAULT_BACKPROMPT_END(instance_text):
     return f"Using the numbers {instance_text} please provide a correct expression that evaluates to 24. Write your answer first. At the end of your answer, write {END_TAG}\nAnswer: "
 
 def check_answer(instance_text, equation):
-    input_nums = instance_text.split(" ")
+    input_nums = instance_text.split("\n")[0].split(" ")
     expression = equation.strip().split('\n')[0].lower().split('=')[0]
     numbers = re.findall(r'\d+', expression)
     if sorted(numbers) != sorted(input_nums): return False, f"This expression consists of the numbers {', '.join(numbers)}, but it has to consist of only and exactly {input_nums}."
@@ -57,9 +58,50 @@ def simplify_with_error(expression):
     except:
         try: simplified = sympy.simplify(f"{expression})")
         except:
-            print(f"Can't simplify {expression}")
+            #print(f"Can't simplify {expression}")
             simplified = expression
     return simplified
+
+def evaluate_up_to(instance_text, response_trace, responses_correct, responses_evals, problem_type="", backprompt_type=""):
+    evaluation = {}
+    responses = response_trace["responses"]
+    token_cost = sum(map(len, responses))
+    prompts = response_trace["prompts"][:len(responses)] # deals with extra appended (but unsent) prompts
+    token_cost += sum(map(len, prompts))
+    evaluation["token cost"]= token_cost
+    
+    # print(responses)
+    # if len(responses)>1: exit()
+    
+    if "llm" in backprompt_type: 
+        evals = responses[1::2]
+        responses = responses[::2]
+    evaluation["correct"] = responses_correct[-1]
+    # print(responses_correct)
+    evaluation["ever corrects"] = sum(responses_correct)
+    evaluation["ever correct"] = True in responses_correct
+    evaluation['false_positive'] = False
+    if "llm" in backprompt_type and len(evals)==len(responses): 
+        try:
+            json_string = re.search("{([^}]*)}",evals[-1]).group(0).lower()
+            claim = json.loads(json_string)['correct']
+        except:
+            claim = False
+        # print(responses_correct[-2])
+        # print(claim)
+        if claim and not responses_correct[-2]:
+            # print('caught one')
+            evaluation["false_positive"] = True
+    if "top" in backprompt_type: evaluation["correct"] = evaluation["ever correct"]
+    evaluation["false negatives"]= sum(responses_correct[:-1])
+    evaluation["num prompts"] = len(prompts)
+    self_con = max(set(responses), key = responses.count)
+    responses = list(map(lambda x: x.replace(" ",""), responses))
+    evaluation["num unique responses"] = len(set(responses))
+    evaluation["num unique evaluations"] = len(set(responses_evals))
+    evaluation["self consistency"]=check_answer(instance_text,self_con)[0]
+    # print(evaluation['false_positive'])
+    return evaluation
 
 #### Required Functions
 
@@ -72,25 +114,22 @@ def generate(instance_text, problem_type):
     return prompt
 
 def evaluate(instance_text, response_trace, problem_type="", backprompt_type=""):
-    evaluation = {}
-
-    responses = response_trace["responses"]
-    token_cost = sum(map(len, responses))
-    prompts = response_trace["prompts"][:len(responses)] # deals with extra appended (but unsent) prompts
-    token_cost += sum(map(len, prompts))
-    evaluation["token cost"]= token_cost
-    if "llm" in backprompt_type: responses = responses[::2]
-    responses_correct = [check_answer(instance_text,x)[0] for x in responses]
-    evaluation["correct"] = responses_correct[-1]
-    evaluation["ever corrects"] = sum(responses_correct)
-    evaluation["ever correct"] = True in responses_correct
-    evaluation["false negatives"]= sum(responses_correct[:-1])
-    evaluation["num prompts"] = len(prompts)
-    responses = list(map(lambda x: x.replace(" ",""), responses))
-    evaluation["num unique responses"] = len(set(responses))
-    responses_evals = list(map(lambda x: simplify_with_error(x.strip().split('\n')[0].lower().split('=')[0]), responses))
-    evaluation["num unique evaluations"] = len(set(responses_evals))
-
+    # print("===")
+    evaluation = []
+    subtrace = dict(response_trace)
+    responses_correct_all = [check_answer(instance_text,x)[0] for x in subtrace["responses"]]
+    responses_evals_all = list(map(lambda x: simplify_with_error(x.strip().split('\n')[0].lower().split('=')[0]), subtrace["responses"]))
+    for n in range(1, len(response_trace["responses"])+1):
+        subtrace["responses"] = response_trace["responses"][:n]
+        responses_correct = responses_correct_all[:n]
+        responses_evals = responses_evals_all[:n]
+        evaluation.append(evaluate_up_to(instance_text, subtrace, responses_correct, responses_evals, problem_type, backprompt_type))
+    fp = evaluation[-1]['false_positive']
+    if "llm" in backprompt_type:
+        evaluation = list(evaluation[:-1])
+    evaluation[-1]['false_positive'] = fp
+    # pprint(response_trace)
+    assert not (fp and evaluation[-1]['correct'])
     return evaluation
     # evaluation = []
     # uniques = []
@@ -119,13 +158,19 @@ def evaluate(instance_text, response_trace, problem_type="", backprompt_type="")
     # evaluation[-1]["stopped"] = response_trace["stopped"]
     # return evaluation
 
-def backprompt(instance_text, instance_output, backprompt_type):
+def backprompt(instance_text, instance_output, backprompt_type, problem_type):
     model_response = instance_output["responses"][-1]
     if backprompt_type == "llm":
         #free form feedback from the llm
         if len(instance_output["responses"])%2==0:
             # Return generation prompt for even numbered responses, but first check for the stop phrase
-            llm_json = json.loads(model_response)
+            llm_json = {}
+            try: 
+                json_string = re.search("{([^}]*)}",model_response).group(0).lower()
+                llm_json = json.loads(json_string)
+            except:
+                llm_json["correct"] = False
+                llm_json["feedback"] = model_response
             if llm_json["correct"]:
                 return STOP_PHRASE
             backprompt = concat_trace(instance_output, divisor=2)
@@ -140,11 +185,41 @@ def backprompt(instance_text, instance_output, backprompt_type):
             backprompt_query+= f"\nIf it is not correct, please give feedback on what is wrong and how to correct it."
             backprompt_query+= '\nRespond only in JSON format as described below:\n{\n   "feedback": "feedback",\n   "correct": boolean}\nEnsure that Python\'s json.loads can parse this.'
             return backprompt_query
+    if backprompt_type == "llm-cot":
+        # A basic zero-shot CoT prompt for verification
+        if len(instance_output["responses"])%2==0:
+            # Return generation prompt for even numbered responses, but first check for the stop phrase
+            llm_json = {}
+            try: 
+                json_string = re.search("{([^}]*)}",model_response).group(0).lower()
+                llm_json = json.loads(json_string)
+            except:
+                llm_json["correct"] = False
+                llm_json["feedback"] = model_response
+            # json_string = re.search("{([^}]*)}",model_response).group(0).lower()
+            # llm_json = json.loads(json_string)
+            if llm_json["correct"]:
+                return STOP_PHRASE
+            backprompt = concat_trace(instance_output, divisor=2)
+            backprompt += "Feedback: This is not correct.\n"
+            backprompt += llm_json["feedback"]
+            backprompt += f"\n\nWith this feedback, please try again. {DEFAULT_BACKPROMPT_END(instance_text)}"
+            return backprompt
+        else:
+            # Return checking prompt for odd numbered responses
+            backprompt_query = f"Using each of the numbers {instance_text} exactly as many times as they appear in the list and the basic arithmetic operations (+ - * /), it is possible to write an expression that evaluates to 24. "
+            backprompt_query+= f"Please check if the following expression uses only the correct numbers (and no others) and evaluates to 24: " +model_response
+            backprompt_query+= f"\nIf it is not correct, please give feedback on what is wrong and how to correct it."
+            backprompt_query+= f"\nFirst, think step by step. Check that the expression uses only the correct numbers, has exactly the right number of instances each number, and evaluates to 24. Then decide what your final answer is."
+            backprompt_query+= '\nWhen outputting your final answer, first print the [Answer] tag, then put your final answer after the [Answer] tag and respond only in JSON format as described below:\n{\n   "feedback": "feedback",\n   "correct": boolean}\nEnsure that Python\'s json.loads can parse this.'
+            backprompt_query+= f"\n\nLet's think step by step.\n[Thoughts]"
+            return backprompt_query
     if backprompt_type == "llm-evaluate":
         #told to evaluate the number first
         if len(instance_output["responses"])%2==0:
             # Return generation prompt for even numbered responses, but first check for the stop phrase
-            llm_json = json.loads(model_response)
+            json_string = re.search("{([^}]*)}",model_response).group(0).lower()
+            llm_json = json.loads(json_string)
             if llm_json["correct"]:
                 return STOP_PHRASE
             backprompt = concat_trace(instance_output, divisor=2)
@@ -163,7 +238,8 @@ def backprompt(instance_text, instance_output, backprompt_type):
         # Binary LLM feedback
         if len(instance_output["responses"])%2==0:
             # Return generation prompt for even numbered responses, but first check for the stop phrase
-            llm_json = json.loads(model_response)
+            json_string = re.search("{([^}]*)}",model_response).group(0).lower()
+            llm_json = json.loads(json_string)
             if llm_json["correct"]:
                 return STOP_PHRASE
             return f"{concat_trace(instance_output, divisor=2)}Feedback: This is not correct. {DEFAULT_BACKPROMPT_END(instance_text)}"
@@ -172,6 +248,32 @@ def backprompt(instance_text, instance_output, backprompt_type):
             backprompt_query = f"Using each of the numbers {instance_text} exactly as many times as they appear in the list and the basic arithmetic operations (+ - * /), it is possible to write an expression that evaluates to 24. "
             backprompt_query+= f"Please check if the following expression uses only the correct numbers (and no others) and evaluates to 24: " +model_response
             backprompt_query+= '\nRespond only in JSON format as described below:\n{\n"correct": boolean}\nEnsure that Python\'s json.loads can parse this.'
+            return backprompt_query
+    if backprompt_type == "llm-sample":
+        # llm sample into llm verifier, run at higher temp
+        if len(instance_output["responses"])%2==0:
+            # Return generation prompt for even numbered responses, but first check for the stop phrase
+            json_string = re.search("{([^}]*)}",model_response).group(0).lower()
+            llm_json = json.loads(json_string)
+            if llm_json["correct"]:
+                return STOP_PHRASE
+            return instance_output["prompts"][0]
+        else:
+            # Return checking prompt for odd numbered responses
+            backprompt_query = f"Using each of the numbers {instance_text} exactly as many times as they appear in the list and the basic arithmetic operations (+ - * /), it is possible to write an expression that evaluates to 24. "
+            backprompt_query+= f"Please check if the following expression uses only the correct numbers (and no others) and evaluates to 24: " +model_response
+            backprompt_query+= f"\nIf it is not correct, please give feedback on what is wrong and how to correct it."
+            backprompt_query+= '\nRespond only in JSON format as described below:\n{\n   "feedback": "feedback",\n   "correct": boolean}\nEnsure that Python\'s json.loads can parse this.'
+            return backprompt_query
+    if backprompt_type == "llm-lang-top":
+        # New prompts are just as short, but now translated. Uses an external verifier
+        if len(instance_output["responses"])%2==0:
+            # Return generation prompt made by LLM for even numbered responses
+            return model_response
+        else:
+            # Return translation prompt for odd numbered responses
+            backprompt_query = f"While ensuring that no information is lost, and without including anything else in your response, translate the following into Spanish. Do not say {END_TAG} at any point:"
+            backprompt_query+= f"\n\n{instance_output['prompts'][0]}"
             return backprompt_query
     if backprompt_type == "top":
         # Just do the same initial prompt every time
@@ -188,6 +290,9 @@ def backprompt(instance_text, instance_output, backprompt_type):
         return backprompt
     check, reason = check_answer(instance_text, model_response)
     if check: return STOP_PHRASE
+    if backprompt_type == "top-stop":
+        # Just do the same initial prompt every time, but stop it if it's correct
+        return instance_output["prompts"][0]
     if backprompt_type == "passfail":
         return f"{concat_trace(instance_output)}Feedback: This is not correct. {DEFAULT_BACKPROMPT_END(instance_text)}"
     elif backprompt_type == "evaluate":

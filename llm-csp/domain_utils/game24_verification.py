@@ -78,6 +78,18 @@ def file_ending():
 
 def generate(instance_text, problem_type):
     # format (stored in data/game24_verification) is numbers instance with lines appended giving expressions of various types
+    numbers = instance_text.split("\n")[0]
+    if "-cot" in problem_type:
+        problem_type = problem_type.split("-cot")[0]
+        if problem_type not in instance_text:
+            print(f"There is no {problem_type} key in {instance_text}")
+        prompt = f"Using each of the numbers {numbers} exactly as many times as they appear in the list and the basic arithmetic operations (+ - * /), it is possible to write an expression that evaluates to 24. "
+        prompt+= f"Please check if the following expression uses only the correct numbers (and no others) and evaluates to 24: " + instance_text.split(problem_type)[1].split("\n")[0] + "\n"
+        prompt+= f"\nIf it is not correct, please give feedback on what is wrong and how to correct it."
+        prompt+= f"\nFirst, think step by step. Check that the expression uses only the correct numbers, has exactly the right number of instances each number, and evaluates to 24. Then decide what your final answer is."
+        prompt+= '\nWhen outputting your final answer, first print the [Answer] tag, then put your final answer after the [Answer] tag and respond only in JSON format as described below:\n{\n   "feedback": "feedback",\n   "correct": boolean}\nEnsure that Python\'s json.loads can parse this.'
+        prompt+= f"\n\nLet's think step by step.\n[Thoughts]"
+        return prompt
     if "-no-info" in problem_type:
         problem_type = problem_type.split("-no-info")[0]
         if problem_type not in instance_text:
@@ -89,7 +101,6 @@ def generate(instance_text, problem_type):
         return prompt
     if problem_type not in instance_text:
         print(f"There is no {problem_type} key in {instance_text}")
-    numbers = instance_text.split("\n")[0]
     prompt = f"Using each of the numbers {numbers} exactly as many times as they appear in the list and the basic arithmetic operations (+ - * /), it is possible to write an expression that evaluates to 24. "
     prompt = f"Please check if the following expression uses only the given numbers (and no others) and evaluates to 24: "
     prompt+= instance_text.split(problem_type)[1].split("\n")[0] + "\n"
@@ -102,13 +113,29 @@ def generate(instance_text, problem_type):
     return prompt
 
 def evaluate(instance_text, response_trace, problem_type="", backprompt_type=""):
-    evaluation = {}
-    expression = instance_text.split(problem_type.split("-no-info")[0])[1].split("\n")[0].strip()
-    try: evaluation["correct simplification"] = sympy.simplify(expression) is response_trace["responses"][-1]["evaluation"]
-    except: evaluation["correct simplification"] = False
-    if "-no-info" in problem_type: evaluation["correct"] = evaluation["correct simplification"]
-    else: evaluation["correct"] = game24.check_answer(expression)[0] is response_trace["responses"][-1]["correct"]
-    return evaluation
+    evaluation = {"num prompts": 1}
+    # print(instance_text)
+    # print(problem_type)
+    # print("====")
+    expression = instance_text.split(problem_type.split("-no-info")[0].split("-cot")[0])[1].split("\n")[0].strip()
+    cleaned_response = response_trace["responses"][-1]#.split("[Answer]")[1]
+    # print(response_trace["responses"][-1].split("[Answer]")[1])
+    claim = json.loads(cleaned_response)
+    ground_truth = game24.check_answer(instance_text,expression)
+    try: evaluation["correct simplification"] = sympy.simplify(expression.split("=")[0]) == float(claim["evaluation"])
+    except:
+        # print(f"Failed to simplify: {expression}")
+        # print(f"Or failed to grab evaluation from claim keys: {claim.keys()}")
+        evaluation["correct simplification"] = False
+    if "-no-info" in problem_type: 
+        evaluation["correct"] = ground_truth[0] is (24.0 == float(claim["evaluation"]))
+    else: evaluation["correct"] = ground_truth[0] is claim["correct"]
+    evaluation["ground truth"] = ground_truth[0]
+    evaluation["TP"] = ground_truth[0] and claim['correct']
+    evaluation["FN"] = ground_truth[0] and not claim['correct']
+    evaluation["TN"] = not ground_truth[0] and not claim['correct']
+    evaluation["FP"] = not ground_truth[0] and claim['correct']
+    return [evaluation]
 
 def backprompt(instance_text, model_response, backprompt_type):
     raise NotImplementedError("No backprompting for verification")

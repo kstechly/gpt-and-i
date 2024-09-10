@@ -4,18 +4,21 @@ import time
 import json
 import time
 from tqdm import tqdm
-import openai
+from openai import OpenAI
+
+client = OpenAI()
 import domain_utils
 from domain_utils import *
-from transformers import AutoTokenizer, AutoModelForCausalLM, AutoModel, StoppingCriteriaList, StoppingCriteria
-from huggingface_hub import login
+# from transformers import AutoTokenizer, AutoModelForCausalLM, AutoModel, StoppingCriteriaList, StoppingCriteria
+# from huggingface_hub import login
 
-MAX_GPT_RESPONSE_LENGTH = 100
+MAX_GPT_RESPONSE_LENGTH = 1500
+MAX_GPT_RESPONSE_LENGTH_SAFE = 300
 MAX_BACKPROMPT_LENGTH = 15
-STOP_PHRASE = "Verifier confirmed success" # what the verifier has to say
+STOP_PHRASE = "stop10002" # "Verifier confirmed success" # what the verifier has to say
 STOP_STATEMENT = "[ANSWER END]" # what we look for to end LLM response generation
 
-def get_responses(engine, domain_name, specified_instances = [], run_till_completion=False, ignore_existing=False, verbose=False, multiprompting="", problem_type="", multiprompt_num=15, temp=0, model=None):
+def get_responses(engine, domain_name, specified_instances = [], run_till_completion=False, ignore_existing=False, verbose=False, multiprompting="", problem_type="", multiprompt_num=15, temp=0, model=None, trial_id=0):
     domain = domain_utils.domains[domain_name]
     cost = 0.00
 
@@ -26,8 +29,9 @@ def get_responses(engine, domain_name, specified_instances = [], run_till_comple
     if multiprompting: output_dir += f"backprompting-{multiprompting}{f'-temp{temp}' if temp else ''}/"
     if problem_type: output_dir+=f"{problem_type}/"
     os.makedirs(output_dir, exist_ok=True)
+    if trial_id: output_dir+=f"{trial_id}"
     output_json = output_dir+"responses.json"
-    
+
     # Load prompts
     with open(prompt_dir+f"prompts{f'-{problem_type}' if problem_type else ''}.json", 'r') as file:
         input = json.load(file)
@@ -47,7 +51,7 @@ def get_responses(engine, domain_name, specified_instances = [], run_till_comple
                 with open(f"{output_dir}responses-{stamp}.json","w") as file:
                     json.dump(output, file, indent=4)
                     output = {}
-    
+
     # Loop over instances until done
     while True:
         failed_instances = []
@@ -81,17 +85,19 @@ def get_responses(engine, domain_name, specified_instances = [], run_till_comple
             while len(instance_output["responses"])< multiprompt_num and not instance_output["stopped"]:
                 if len(instance_output["prompts"]) > len(instance_output["responses"]):
                     if verbose: print(f"==Sending prompt {len(instance_output['prompts'])} of length {len(instance_output['prompts'][-1])} to LLM for instance {instance}==")
-                    cost += len(instance_output['prompts'][-1])*0.00003
+                    if verbose: print(instance_output["prompts"][-1])
+                    cost += len(instance_output['prompts'][-1])*0.00003/3
                     llm_response = send_query(instance_output["prompts"][-1], engine, MAX_GPT_RESPONSE_LENGTH, stop_statement=STOP_STATEMENT, temp=temp, model=model)
                     if not llm_response:
                         failed_instances.append(instance)
                         print(f"==Failed instance: {instance}==")
                         break
                     if verbose: print(f"==LLM response: ==\n{llm_response}")
-                    cost += len(llm_response)*0.00006
+                    cost += len(llm_response)*0.00006/3
                     instance_output["responses"].append(llm_response)
                 if len(instance_output["prompts"]) == len(instance_output["responses"]) and multiprompting:
-                    try: backprompt_query = domain.backprompt(instance_text, instance_output, multiprompting)
+                    backprompt_query = domain.backprompt(instance_text, instance_output, multiprompting, problem_type)
+                    try: pass
                     except: 
                         failed_instances.append(instance)
                         print(f"==Failed instance: {instance} (Couldn't generate backprompt)==")
@@ -100,12 +106,14 @@ def get_responses(engine, domain_name, specified_instances = [], run_till_comple
                     if check_backprompt(backprompt_query):
                         instance_output["stopped"] = True
                         if verbose: print(f"==Stopping instance {instance} after {len(instance_output['responses'])} responses.==")
-                        break
+
                 output[instance]=instance_output
                 if verbose: print(f"***Current cost: {cost:.2f}***")
-                with open(output_json, 'w') as file:
+                with open(f"{output_json}.tmp", 'w') as file:
                     json.dump(output, file, indent=4)
-        
+                os.replace(f"{output_json}.tmp", output_json)
+                if instance_output["stopped"]: break
+
         # Run till completion implementation
         if run_till_completion:
             if len(failed_instances) == 0:
@@ -151,8 +159,8 @@ def generate_from_huggingfaceLLM(model, tokenizer, query, max_tokens, stop_state
     return tokenizer.decode(output_sequences[0], skip_special_tokes=True)
 
 
-def send_query(query, engine, max_tokens, stop_statement="[ANSWER END]", temp=0, top_num=5, model=None):
-    max_token_err_flag = False
+def send_query(query, engine, max_tokens, stop_statement="09h2309uharsuytbayuhfar", temp=0, top_num=5, model=None):
+    #TODO fix stop statement
     if '_chat' in engine:
         eng = engine.split('_')[0]
         # print('chatmodels', eng)
@@ -161,11 +169,19 @@ def send_query(query, engine, max_tokens, stop_statement="[ANSWER END]", temp=0,
         {"role": "user", "content": query}
         ]
         try:
-            response = openai.ChatCompletion.create(model=eng, messages=messages, temperature=temp, stop=stop_statement)
+            response = client.chat.completions.create(model=eng, messages=messages, temperature=temp, max_tokens=max_tokens, tool_choice=None)
+            text_response = response.choices[0].message.content
         except Exception as e:
-            max_token_err_flag = True
             print("[-]: Failed GPT query execution: {}".format(e))
-        text_response = response['choices'][0]['message']['content'] if not max_token_err_flag else ""
+            text_response = ""
+            print("BUT! Trying safer token count...")
+            try:
+                response = client.chat.completions.create(model=eng, messages=messages, temperature=temp, max_tokens=MAX_GPT_RESPONSE_LENGTH_SAFE, tool_choice=None)
+                text_response = response.choices[0].message.content
+            except Exception as e:
+                print("Couldn't fix it, that's a huge rip man: {}".format(e))
+        # print("====FINISH REASON====")
+        # print(response.choices[0].finish_reason)
         return text_response.strip()        
     elif 'llama' in engine:
         if model:
@@ -177,19 +193,19 @@ def send_query(query, engine, max_tokens, stop_statement="[ANSWER END]", temp=0,
             assert model is not None
     else:
         try:
-            response = openai.Completion.create(
-                model=engine,
-                prompt=query,
-                temperature=0,
-                max_tokens=max_tokens,
-                top_p=1,
-                frequency_penalty=0,
-                presence_penalty=0,
-                stop=stop_statement)
+            exit()
+            response = client.completions.create(model=engine,
+            prompt=query,
+            temperature=0,
+            max_tokens=max_tokens,
+            top_p=1,
+            frequency_penalty=0,
+            presence_penalty=0,
+            stop=stop_statement)
         except Exception as e:
             max_token_err_flag = True
             print("[-]: Failed GPT query execution: {}".format(e))
-        text_response = response["choices"][0]["text"] if not max_token_err_flag else ""
+        text_response = response.choices[0].text if not max_token_err_flag else ""
         return text_response.strip()
 
 if __name__=="__main__":
@@ -209,6 +225,7 @@ if __name__=="__main__":
     parser.add_argument('-m', '--start_number', type=int, default=1, help='For running from instance m to n. You must specify -n for this to work')
     parser.add_argument('-p', '--problem', type=str, default='', help='If doing a domain subproblem, specify it here')
     parser.add_argument('-t', '--temperature', type=float, default=0, help='Temperature from 0.0 to 2.0')
+    parser.add_argument('-T', '--trial', type=int, default=1, help='A unique number identifying which trial run this is continuing/starting')
     args = parser.parse_args()
     engine = args.engine
     domain_name = args.domain
@@ -225,13 +242,14 @@ if __name__=="__main__":
     start_number = args.start_number
     problem_type = args.problem
     temperature = args.temperature
+    trial_num = args.trial
     if end_number>0 and specified_instances:
         print("You can't use both -s and -n")
     elif end_number>0:
         specified_instances = list(range(start_number,end_number+1))
         print(f"Running instances from {start_number} to {end_number}")
-    print(f"Engine: {engine}, Domain: {domain_name}, Verbose: {verbose}, Run till completion: {run_till_completion}, Multiprompt Type: {backprompt}, Problem Type: {problem_type}")
-    
+    print(f"Engine: {engine}, Domain: {domain_name}, Verbose: {verbose}, Run till completion: {run_till_completion}, Multiprompt Type: {backprompt}, Problem Type: {problem_type}, Trial ID: {trial_num}")
+
     model = None
     if 'llama' in engine:
         # HuggingFace parameters
@@ -244,5 +262,6 @@ if __name__=="__main__":
             model = get_llama2_70b()
         elif engine == 'llama2_13b':
             model = get_llama2_13b()
-
-    get_responses(engine, domain_name, specified_instances, run_till_completion, ignore_existing, verbose, backprompt, problem_type, multiprompt_num=backprompt_num, temp=temperature, model=model)
+    for x in range(0,trial_num):
+        print(f"****TRIAL {x}*****")
+        get_responses(engine, domain_name, specified_instances, run_till_completion, ignore_existing, verbose, backprompt, problem_type, multiprompt_num=backprompt_num, temp=temperature, model=model, trial_id=x)
