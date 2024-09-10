@@ -1,5 +1,6 @@
 # To add a new domain, create a module in this subfolder, and then add it to the following:
-from domain_utils import graph_coloring, color_verification, game24, game24_verification
+from domain_utils import graph_coloring
+from domain_utils import color_verification, game24, game24_verification
 __all__ = ["graph_coloring","color_verification", "game24", "game24_verification"]
 domains = {"graph_coloring":graph_coloring,"color_verification":color_verification, "game24":game24, "game24_verification":game24_verification}
 

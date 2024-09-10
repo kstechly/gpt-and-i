@@ -19,7 +19,33 @@ import json
 import time
 import re
 import random
-from domain_utils.color_verification import parse_messy_json, generate_cot_prompt
+#from domain_utils.color_verification import parse_messy_json, generate_cot_prompt
+
+
+#TODO fix these imports and doubling ups with color_verification
+def generate_cot_prompt(instance_text, coloring_text):
+    prompt = ''
+    prompt+= '\n[Instructions]\nWhen outputting your final answer, first print the [Answer] tag, then put your final answer after the [Answer] tag. Respond only in the following format:\nWrong Edges: a list of incorrect edges\nAll Vertices Colored: boolean representing if every vertex is colored\nOptimal Or Less: boolean representing if the number of colors is no more than the optimal\nCorrect: boolean'
+    prompt+= f"\n\n[Graph]\nThe following graph, described as a set of edges, has an optimal coloring number of {graph_coloring.optimal_coloring_number(instance_text)}:\n"
+    _, graph_text = graph_coloring.generate_graph(instance_text)
+    prompt+= graph_text
+    prompt+= f"\n[Coloring]\nA coloring is correct if no adjacent vertices are the same color and the total number of colors used is no more than the optimal coloring number. Please check if this coloring is correct: {coloring_text}"
+    prompt+= f"\n\nLet's think step by step. Remember to output your final answer in the format described in the instructions.\n[Thoughts]"
+    return prompt
+
+def parse_messy_json(response_raw):
+    try: response = response_raw.split("[Answer]")[1].lower()
+    except: 
+        try: response = response_raw.split("final answer is:")[1].lower()
+        except: raise ValueError(response_raw)
+    # print(response)
+    wrong_edges = response.split('wrong edges:')[1].split('\n')[0].strip().replace("(","[").replace(")","]")
+    all_verts = response.split('all vertices colored:')[1].split('\n')[0].strip()
+    optimal_or_less = response.split('optimal or less:')[1].split('\n')[0].strip()
+    correct = response.split('correct:')[1].split('\n')[0].strip()
+    messy_json_string = '{"wrong_edges": '+wrong_edges+', "all_verts":'+all_verts+', "opt":'+optimal_or_less+', "correct":'+correct+'}'
+    return json.loads(messy_json_string)
+
 
 def parse_dimacs(instance_text):
     parsed = []
