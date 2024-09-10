@@ -91,6 +91,7 @@ def evaluate_plan(engine, domain_name, specified_instances=[], ignore_existing=F
     else: print(f"Over prompt num: {list(map(lambda x: x['correct'],sneaker))}")
     print(f"Prompts per instance: {[evaluations[x][-1]['num prompts'] for x in evaluations]}")
     print(f"Correct per instance: {[int(evaluations[x][-1]['correct']) for x in evaluations]}")
+    print(f"Correct % per instance: {[int(100*float(evaluations[x][-1]['ever corrects']/float(evaluations[x][-1]['num prompts']))) for x in evaluations]}")
     return sneak_peek, sneak_peek_average, sneaker
 
 if __name__=="__main__":

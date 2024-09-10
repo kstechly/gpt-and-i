@@ -5,6 +5,7 @@ import json
 import time
 from tqdm import tqdm
 from openai import OpenAI
+import concurrent.futures
 
 client = OpenAI()
 import domain_utils
@@ -51,68 +52,72 @@ def get_responses(engine, domain_name, specified_instances = [], run_till_comple
                 with open(f"{output_dir}responses-{stamp}.json","w") as file:
                     json.dump(output, file, indent=4)
                     output = {}
+    def process_item(instance):
+        instance_output = {"prompts":[input[str(instance)]], "responses":[], "stopped":False}
+        finished_prompts = 0
 
-    # Loop over instances until done
+        # Load actual instance data
+        instance_location = f"{instances_dir}/instance-{instance}{domain.file_ending()}"
+        try:
+            with open(instance_location,"r") as fp:
+                instance_text = fp.read()
+        except FileNotFoundError:
+            print(f"{instance_location} not found. Skipping instance {instance} entirely.")
+            return
+
+        # Check if this instance is already complete
+        if instance in output:
+            instance_output = output[instance]
+            finished_prompts = len(instance_output["responses"])
+            if instance_output["stopped"]:
+                if verbose: print(f"===Instance {instance} already completed===")
+                return
+            elif finished_prompts >= multiprompt_num:
+                if verbose: print(f"===Instance {instance} already maxed out at {finished_prompts} out of {multiprompt_num} backprompts===")
+                return
+            elif verbose: print(f"===Instance {instance} not complete yet. Continuing from backprompt {finished_prompts+1}===")
+        elif verbose: print(f"===Instance {instance} has never been seen before===")
+
+        # Loop over the multiprompts until verifier stops or times out
+        while len(instance_output["responses"])< multiprompt_num and not instance_output["stopped"]:
+            if len(instance_output["prompts"]) > len(instance_output["responses"]):
+                if verbose: print(f"==Sending prompt {len(instance_output['prompts'])} of length {len(instance_output['prompts'][-1])} to LLM for instance {instance}==")
+                if verbose: print(instance_output["prompts"][-1])
+                # cost += len(instance_output['prompts'][-1])*0.00003/3
+                llm_response = send_query(instance_output["prompts"][-1], engine, MAX_GPT_RESPONSE_LENGTH, stop_statement=STOP_STATEMENT, temp=temp, model=model)
+                print('past the response')
+                if not llm_response:
+                    failed_instances.append(instance)
+                    print(f"==Failed instance: {instance}==")
+                    break
+                if verbose: print(f"==LLM response: ==\n{llm_response}")
+                # cost += len(llm_response)*0.00006/3
+                instance_output["responses"].append(llm_response)
+            if len(instance_output["prompts"]) == len(instance_output["responses"]) and multiprompting:
+                backprompt_query = domain.backprompt(instance_text, instance_output, multiprompting, problem_type)
+                try: pass
+                except: 
+                    failed_instances.append(instance)
+                    print(f"==Failed instance: {instance} (Couldn't generate backprompt)==")
+                    break
+                instance_output["prompts"].append(backprompt_query)
+                if check_backprompt(backprompt_query):
+                    instance_output["stopped"] = True
+                    if verbose: print(f"==Stopping instance {instance} after {len(instance_output['responses'])} responses.==")
+
+            output[instance]=instance_output
+            # if verbose: print(f"***Current cost: {cost:.2f}***")
+            with open(f"{output_json}.tmp", 'w') as file:
+                json.dump(output, file, indent=4)
+            os.replace(f"{output_json}.tmp", output_json)
+            if instance_output["stopped"]: break
+
+    # Loop over instances until done, multiproccessed
     while True:
         failed_instances = []
-        for instance in tqdm(input):
-            instance_output = {"prompts":[input[str(instance)]], "responses":[], "stopped":False}
-            finished_prompts = 0
-
-            # Load actual instance data
-            instance_location = f"{instances_dir}/instance-{instance}{domain.file_ending()}"
-            try:
-                with open(instance_location,"r") as fp:
-                    instance_text = fp.read()
-            except FileNotFoundError:
-                print(f"{instance_location} not found. Skipping instance {instance} entirely.")
-                continue
-
-            # Check if this instance is already complete
-            if instance in output:
-                instance_output = output[instance]
-                finished_prompts = len(instance_output["responses"])
-                if instance_output["stopped"]:
-                    if verbose: print(f"===Instance {instance} already completed===")
-                    continue
-                elif finished_prompts >= multiprompt_num:
-                    if verbose: print(f"===Instance {instance} already maxed out at {finished_prompts} out of {multiprompt_num} backprompts===")
-                    continue
-                elif verbose: print(f"===Instance {instance} not complete yet. Continuing from backprompt {finished_prompts+1}===")
-            elif verbose: print(f"===Instance {instance} has never been seen before===")
-
-            # Loop over the multiprompts until verifier stops or times out
-            while len(instance_output["responses"])< multiprompt_num and not instance_output["stopped"]:
-                if len(instance_output["prompts"]) > len(instance_output["responses"]):
-                    if verbose: print(f"==Sending prompt {len(instance_output['prompts'])} of length {len(instance_output['prompts'][-1])} to LLM for instance {instance}==")
-                    if verbose: print(instance_output["prompts"][-1])
-                    cost += len(instance_output['prompts'][-1])*0.00003/3
-                    llm_response = send_query(instance_output["prompts"][-1], engine, MAX_GPT_RESPONSE_LENGTH, stop_statement=STOP_STATEMENT, temp=temp, model=model)
-                    if not llm_response:
-                        failed_instances.append(instance)
-                        print(f"==Failed instance: {instance}==")
-                        break
-                    if verbose: print(f"==LLM response: ==\n{llm_response}")
-                    cost += len(llm_response)*0.00006/3
-                    instance_output["responses"].append(llm_response)
-                if len(instance_output["prompts"]) == len(instance_output["responses"]) and multiprompting:
-                    backprompt_query = domain.backprompt(instance_text, instance_output, multiprompting, problem_type)
-                    try: pass
-                    except: 
-                        failed_instances.append(instance)
-                        print(f"==Failed instance: {instance} (Couldn't generate backprompt)==")
-                        break
-                    instance_output["prompts"].append(backprompt_query)
-                    if check_backprompt(backprompt_query):
-                        instance_output["stopped"] = True
-                        if verbose: print(f"==Stopping instance {instance} after {len(instance_output['responses'])} responses.==")
-
-                output[instance]=instance_output
-                if verbose: print(f"***Current cost: {cost:.2f}***")
-                with open(f"{output_json}.tmp", 'w') as file:
-                    json.dump(output, file, indent=4)
-                os.replace(f"{output_json}.tmp", output_json)
-                if instance_output["stopped"]: break
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            executor.map(process_item, input)
+        print("done?")
 
         # Run till completion implementation
         if run_till_completion:
@@ -124,7 +129,7 @@ def get_responses(engine, domain_name, specified_instances = [], run_till_comple
                 time.sleep(5)
         else:
             print(f"Failed instances: {failed_instances}")
-            print(f"Total Cost: {cost:.2f}")
+            # print(f"Total Cost: {cost:.2f}")
             break
 
 def check_backprompt(backprompt):
@@ -193,6 +198,7 @@ def send_query(query, engine, max_tokens, stop_statement="09h2309uharsuytbayuhfa
             assert model is not None
     else:
         try:
+            print("Did you forget to add _chat?")
             exit()
             response = client.completions.create(model=engine,
             prompt=query,
