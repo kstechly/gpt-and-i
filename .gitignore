@@ -3,7 +3,9 @@
 old_runs/
 *.sh
 *-old_format*
+*.tmp
 
 # Exclude notes
 *.todo
 history.json
+
