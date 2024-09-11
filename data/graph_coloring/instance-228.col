@@ -1,0 +1,8 @@
+
+e 0 5
+e 2 3
+e 2 4
+e 2 5
+e 3 5
+e 4 5
+c OPTIMAL CHROMATIC NUMBER === 3

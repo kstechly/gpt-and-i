@@ -80,7 +80,7 @@ def evaluate_plan(engine, domain_name, specified_instances=[], ignore_existing=F
                     q_num = -1
                 sneaker[p_num] = {x: sneaker[p_num][x]+evaluations[instance][q_num][x] for x in sneaker[p_num]}
         if len(sneaker) < len(evaluations[instance]): sneaker = sneaker + evaluations[instance][len(sneaker):]
-        for p_num in range(len(sneaker),30):
+        for p_num in range(len(sneaker),101):
             if len(sneaker) <= p_num: sneaker.append(evaluations[instance][-1])
             else: sneaker[p_num] = {x: sneaker[p_num][x]+evaluations[instance][-1][x] for x in evaluations[instance][-1]}
             

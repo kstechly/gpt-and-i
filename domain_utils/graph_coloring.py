@@ -19,7 +19,14 @@ import json
 import time
 import re
 import random
-from domain_utils.color_verification import parse_messy_json, generate_cot_prompt
+#from domain_utils.color_verification import parse_messy_json, generate_cot_prompt
+
+def parse_messy_json(*args, **kwargs):
+    print("FIX ME")
+    exit()
+def generate_cot_prompt(*args, **kwargs):
+    print("FIX ME")
+    exit()
 
 def parse_dimacs(instance_text):
     parsed = []

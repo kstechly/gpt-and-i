@@ -85,12 +85,11 @@ def get_responses(engine, domain_name, specified_instances = [], run_till_comple
                 if verbose: print(instance_output["prompts"][-1])
                 # cost += len(instance_output['prompts'][-1])*0.00003/3
                 llm_response = send_query(instance_output["prompts"][-1], engine, MAX_GPT_RESPONSE_LENGTH, stop_statement=STOP_STATEMENT, temp=temp, model=model)
-                print('past the response')
                 if not llm_response:
                     failed_instances.append(instance)
                     print(f"==Failed instance: {instance}==")
                     break
-                if verbose: print(f"==LLM response: ==\n{llm_response}")
+                if verbose: print(f"==LLM response to instance {instance}: ==\n{llm_response}")
                 # cost += len(llm_response)*0.00006/3
                 instance_output["responses"].append(llm_response)
             if len(instance_output["prompts"]) == len(instance_output["responses"]) and multiprompting:
@@ -98,7 +97,7 @@ def get_responses(engine, domain_name, specified_instances = [], run_till_comple
                 try: pass
                 except: 
                     failed_instances.append(instance)
-                    print(f"==Failed instance: {instance} (Couldn't generate backprompt)==")
+                    raise ValueError(f"==Failed instance: {instance} (Couldn't generate backprompt)==")
                     break
                 instance_output["prompts"].append(backprompt_query)
                 if check_backprompt(backprompt_query):
@@ -107,17 +106,26 @@ def get_responses(engine, domain_name, specified_instances = [], run_till_comple
 
             output[instance]=instance_output
             # if verbose: print(f"***Current cost: {cost:.2f}***")
-            with open(f"{output_json}.tmp", 'w') as file:
+            with open(f"{output_json}.{instance}.tmp", 'w') as file:
                 json.dump(output, file, indent=4)
-            os.replace(f"{output_json}.tmp", output_json)
+            os.replace(f"{output_json}.{instance}.tmp", output_json)
             if instance_output["stopped"]: break
 
     # Loop over instances until done, multiproccessed
     while True:
         failed_instances = []
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            executor.map(process_item, input)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=100) as executor:
+            thread_exceptions = executor.map(process_item, input)
         print("done?")
+        with open(f"{output_json}.tmp", 'w') as file:
+            json.dump(output, file, indent=4)
+        os.replace(f"{output_json}.tmp", output_json)
+        try:
+            for thread_ex in thread_exceptions:
+                thread_ex
+        except Exception as e:
+            print(e)
+		
 
         # Run till completion implementation
         if run_till_completion:
