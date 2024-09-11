@@ -21,15 +21,6 @@ import re
 import random
 #from domain_utils.color_verification import parse_messy_json, generate_cot_prompt
 
-<<<<<<< HEAD
-def parse_messy_json(*args, **kwargs):
-    print("FIX ME")
-    exit()
-def generate_cot_prompt(*args, **kwargs):
-    print("FIX ME")
-    exit()
-=======
-
 #TODO fix these imports and doubling ups with color_verification
 def generate_cot_prompt(instance_text, coloring_text):
     prompt = ''
@@ -53,8 +44,6 @@ def parse_messy_json(response_raw):
     correct = response.split('correct:')[1].split('\n')[0].strip()
     messy_json_string = '{"wrong_edges": '+wrong_edges+', "all_verts":'+all_verts+', "opt":'+optimal_or_less+', "correct":'+correct+'}'
     return json.loads(messy_json_string)
-
->>>>>>> 78a5ecd0862248694fe98bfb92c3410a505f7c11
 
 def parse_dimacs(instance_text):
     parsed = []
