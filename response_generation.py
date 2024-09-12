@@ -78,8 +78,12 @@ def get_responses(engine, domain_name, specified_instances = [], run_till_comple
             elif verbose: print(f"===Instance {instance} not complete yet. Continuing from backprompt {finished_prompts+1}===")
         elif verbose: print(f"===Instance {instance} has never been seen before===")
 
-        # with open(f'{output_json}.{instance}','w') as file:
-        #     instance_output = json.load(file)
+        try: 
+            with open(f'{output_json}.{instance}','w') as file:
+                instance_output = json.load(file)
+        except: 
+            if verbose: print(f"No previous output to load for instance {instance}")
+
 
         # Loop over the multiprompts until verifier stops or times out
         while len(instance_output["responses"])< multiprompt_num and not instance_output["stopped"]:
