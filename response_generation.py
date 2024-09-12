@@ -88,7 +88,7 @@ def get_responses(engine, domain_name, specified_instances = [], run_till_comple
         # Loop over the multiprompts until verifier stops or times out
         while len(instance_output["responses"])< multiprompt_num and not instance_output["stopped"]:
             if len(instance_output["prompts"]) > len(instance_output["responses"]):
-                if verbose: print(f"==Sending prompt {len(instance_output['prompts'])} of length {len(instance_output['prompts'][-1])} to LLM for instance {instance}==")
+                print(f"==Sending prompt {len(instance_output['prompts'])} of length {len(instance_output['prompts'][-1])} to LLM for instance {instance}==")
                 if verbose: print(instance_output["prompts"][-1])
                 # cost += len(instance_output['prompts'][-1])*0.00003/3
                 llm_response = send_query(instance_output["prompts"][-1], engine, MAX_GPT_RESPONSE_LENGTH, stop_statement=STOP_STATEMENT, temp=temp, model=model)
@@ -122,14 +122,14 @@ def get_responses(engine, domain_name, specified_instances = [], run_till_comple
     while True:
         failed_instances = []
         with concurrent.futures.ThreadPoolExecutor(max_workers=100) as executor:
-            thread_exceptions = executor.map(process_item, input)
+            thread_results = executor.map(process_item, input)
         print("done?")
         with open(f"{output_json}.tmp", 'w') as file:
             json.dump(output, file, indent=4)
         os.replace(f"{output_json}.tmp", output_json)
         try:
-            for instance_output, instance in thread_exceptions:
-                output[instance] = instance_output
+            for x in thread_results:
+                output[x[1]] = x[0]
         except Exception as e:
             print(e)
 		
