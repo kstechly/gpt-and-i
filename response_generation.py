@@ -49,7 +49,7 @@ def get_responses(engine, domain_name, specified_instances = [], run_till_comple
             output = json.load(file)
             if ignore_existing:
                 stamp = str(time.time())
-                with open(f"{output_dir}responses-{stamp}.json","w") as file:
+                with open(f"{output_dir}output[instance] = instance_output-{stamp}.json","w") as file:
                     json.dump(output, file, indent=4)
                     output = {}
     def process_item(instance):
@@ -112,10 +112,10 @@ def get_responses(engine, domain_name, specified_instances = [], run_till_comple
                     if verbose: print(f"==Stopping instance {instance} after {len(instance_output['responses'])} responses.==")
             # if verbose: print(f"***Current cost: {cost:.2f}***")
             with open(f"{output_json}.{instance}.tmp", 'w') as file:
-                json.dump(output, file, indent=4)
+                json.dump(instance_output, file, indent=4)
             os.replace(f"{output_json}.{instance}.tmp", f'{output_json}.{instance}')
             if instance_output["stopped"]: break
-        output[instance]=instance_output
+        return instance_output, instance
         print(f"Instance {instance} processed")
 
     # Loop over instances until done, multiproccessed
@@ -128,8 +128,8 @@ def get_responses(engine, domain_name, specified_instances = [], run_till_comple
             json.dump(output, file, indent=4)
         os.replace(f"{output_json}.tmp", output_json)
         try:
-            for thread_ex in thread_exceptions:
-                thread_ex
+            for instance_output, instance in thread_exceptions:
+                output[instance] = instance_output
         except Exception as e:
             print(e)
 		
