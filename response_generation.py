@@ -92,7 +92,7 @@ def get_responses(engine, domain_name, specified_instances = [], run_till_comple
                     failed_instances.append(instance)
                     print(f"==Failed instance: {instance}==")
                     break
-                if verbose: print(f"==LLM response to instance {instance}: ==\n{llm_response}")
+                if verbose: print(f"==LLM response to prompt {len(instance_output['prompts'])} of instance {instance}: ==\n{llm_response}")
                 # cost += len(llm_response)*0.00006/3
                 instance_output["responses"].append(llm_response)
             if len(instance_output["prompts"]) == len(instance_output["responses"]) and multiprompting:
@@ -112,6 +112,7 @@ def get_responses(engine, domain_name, specified_instances = [], run_till_comple
             os.replace(f"{output_json}.{instance}.tmp", f'{output_json}.{instance}')
             if instance_output["stopped"]: break
         output[instance]=instance_output
+        print(f"Instance {instance} processed")
 
     # Loop over instances until done, multiproccessed
     while True:
