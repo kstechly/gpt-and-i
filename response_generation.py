@@ -78,6 +78,9 @@ def get_responses(engine, domain_name, specified_instances = [], run_till_comple
             elif verbose: print(f"===Instance {instance} not complete yet. Continuing from backprompt {finished_prompts+1}===")
         elif verbose: print(f"===Instance {instance} has never been seen before===")
 
+        # with open(f'{output_json}.{instance}','w') as file:
+        #     instance_output = json.load(file)
+
         # Loop over the multiprompts until verifier stops or times out
         while len(instance_output["responses"])< multiprompt_num and not instance_output["stopped"]:
             if len(instance_output["prompts"]) > len(instance_output["responses"]):
@@ -103,13 +106,12 @@ def get_responses(engine, domain_name, specified_instances = [], run_till_comple
                 if check_backprompt(backprompt_query):
                     instance_output["stopped"] = True
                     if verbose: print(f"==Stopping instance {instance} after {len(instance_output['responses'])} responses.==")
-
-            output[instance]=instance_output
             # if verbose: print(f"***Current cost: {cost:.2f}***")
             with open(f"{output_json}.{instance}.tmp", 'w') as file:
                 json.dump(output, file, indent=4)
-            os.replace(f"{output_json}.{instance}.tmp", output_json)
+            os.replace(f"{output_json}.{instance}.tmp", f'{output_json}.{instance}')
             if instance_output["stopped"]: break
+        output[instance]=instance_output
 
     # Loop over instances until done, multiproccessed
     while True:
