@@ -1,0 +1,5 @@
+1 2 5 7
+correct ((1*2)*(5+7))
+ablated_op ((1*2)*(5-7))
+ablated_number ((12*2)*(5+7))
+random (((7/5)/2)-1)

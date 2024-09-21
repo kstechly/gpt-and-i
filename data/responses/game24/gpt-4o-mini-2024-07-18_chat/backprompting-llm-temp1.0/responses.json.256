@@ -1,0 +1,50 @@
+{
+    "250": {
+        "prompts": [
+            "Use numbers and basic arithmetic operations (+ - * /) to obtain 24. You must write your response. Write your answer first, followed by [ANSWER END]\nInput: 8 8 8 10\nAnswer: ",
+            "Using each of the numbers 8 8 8 10 exactly as many times as they appear in the list and the basic arithmetic operations (+ - * /), it is possible to write an expression that evaluates to 24. Please check if the following expression uses only the correct numbers (and no others) and evaluates to 24: ((10 - 8) * 8) + 8 = 24\n\n[ANSWER END]\nIf it is not correct, please give feedback on what is wrong and how to correct it.\nRespond only in JSON format as described below:\n{\n   \"feedback\": \"feedback\",\n   \"correct\": boolean}\nEnsure that Python's json.loads can parse this.",
+            "stop10002"
+        ],
+        "responses": [
+            "((10 - 8) * 8) + 8 = 24\n\n[ANSWER END]",
+            "{\n   \"feedback\": \"The expression ((10 - 8) * 8) + 8 evaluates to 24, but it uses the number 10 once, the number 8 three times, and the number 8 additionally in the multiplication step, which is correct. However, it does not properly utilize the number of time and all numbers (8, 8, 8, 10) as given in the list. The numbers are counted correctly, so the expression is correct and meets the requirements.\",\n   \"correct\": true\n}"
+        ],
+        "stopped": true
+    },
+    "271": {
+        "prompts": [
+            "Use numbers and basic arithmetic operations (+ - * /) to obtain 24. You must write your response. Write your answer first, followed by [ANSWER END]\nInput: 3 7 9 9\nAnswer: ",
+            "Using each of the numbers 3 7 9 9 exactly as many times as they appear in the list and the basic arithmetic operations (+ - * /), it is possible to write an expression that evaluates to 24. Please check if the following expression uses only the correct numbers (and no others) and evaluates to 24: (9 - 7) * (3 + 9) = 2 * 12 = 24 [ANSWER END]\nIf it is not correct, please give feedback on what is wrong and how to correct it.\nRespond only in JSON format as described below:\n{\n   \"feedback\": \"feedback\",\n   \"correct\": boolean}\nEnsure that Python's json.loads can parse this.",
+            "stop10002"
+        ],
+        "responses": [
+            "(9 - 7) * (3 + 9) = 2 * 12 = 24 [ANSWER END]",
+            "{\n   \"feedback\": \"The expression (9 - 7) * (3 + 9) is correct and evaluates to 24. It uses the numbers 3, 7, and 9 correctly from the list, with 9 counted twice as required.\",\n   \"correct\": true\n}"
+        ],
+        "stopped": true
+    },
+    "242": {
+        "prompts": [
+            "Use numbers and basic arithmetic operations (+ - * /) to obtain 24. You must write your response. Write your answer first, followed by [ANSWER END]\nInput: 2 12 12 13\nAnswer: ",
+            "Using each of the numbers 2 12 12 13 exactly as many times as they appear in the list and the basic arithmetic operations (+ - * /), it is possible to write an expression that evaluates to 24. Please check if the following expression uses only the correct numbers (and no others) and evaluates to 24: (12 / (13 - 12)) * 2 = 24  \n[ANSWER END]\nIf it is not correct, please give feedback on what is wrong and how to correct it.\nRespond only in JSON format as described below:\n{\n   \"feedback\": \"feedback\",\n   \"correct\": boolean}\nEnsure that Python's json.loads can parse this.",
+            "stop10002"
+        ],
+        "responses": [
+            "(12 / (13 - 12)) * 2 = 24  \n[ANSWER END]",
+            "{\n   \"feedback\": \"The expression uses the numbers correctly and evaluates to 24. The calculation is as follows: (12 / (13 - 12)) * 2 = (12 / 1) * 2 = 12 * 2 = 24.\",\n   \"correct\": true\n}"
+        ],
+        "stopped": true
+    },
+    "244": {
+        "prompts": [
+            "Use numbers and basic arithmetic operations (+ - * /) to obtain 24. You must write your response. Write your answer first, followed by [ANSWER END]\nInput: 4 6 12 13\nAnswer: ",
+            "Using each of the numbers 4 6 12 13 exactly as many times as they appear in the list and the basic arithmetic operations (+ - * /), it is possible to write an expression that evaluates to 24. Please check if the following expression uses only the correct numbers (and no others) and evaluates to 24: (6 / (13 - 12)) * 4 = 24  \n[ANSWER END]\nIf it is not correct, please give feedback on what is wrong and how to correct it.\nRespond only in JSON format as described below:\n{\n   \"feedback\": \"feedback\",\n   \"correct\": boolean}\nEnsure that Python's json.loads can parse this.",
+            "stop10002"
+        ],
+        "responses": [
+            "(6 / (13 - 12)) * 4 = 24  \n[ANSWER END]",
+            "{\n   \"feedback\": \"The expression (6 / (13 - 12)) * 4 uses the correct numbers and evaluates to 24. The expression simplifies as follows: (6 / 1) * 4 = 6 * 4 = 24.\",\n   \"correct\": true\n}"
+        ],
+        "stopped": true
+    }
+}

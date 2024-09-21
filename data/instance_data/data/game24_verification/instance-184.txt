@@ -1,0 +1,5 @@
+1 1 6 6
+correct ((1+1)*(6+6))
+ablated_op ((1-1)*(6+6))
+ablated_number ((5+1)*(6+6))
+random (((1*1)*6)*6)

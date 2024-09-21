@@ -1,0 +1,5 @@
+4 4 6 11
+correct (4-(4*(6-11)))
+ablated_op (4/(4*(6-11)))
+ablated_number (8-(4*(6-11)))
+random (((6+4)-11)+4)

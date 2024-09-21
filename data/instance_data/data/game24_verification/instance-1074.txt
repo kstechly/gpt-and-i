@@ -1,0 +1,5 @@
+3 3 9 13
+correct ((3+3)*(13-9))
+ablated_op ((3+3)*(13*9))
+ablated_number ((3+3)*(9-9))
+random (((3*3)+9)+13)

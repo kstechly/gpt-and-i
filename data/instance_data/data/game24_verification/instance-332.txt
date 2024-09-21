@@ -1,0 +1,5 @@
+1 1 6 12
+correct (12+(6*(1+1)))
+ablated_op (12+(6-(1+1)))
+ablated_number (82+(6*(1+1)))
+random (((6*1)*1)-12)

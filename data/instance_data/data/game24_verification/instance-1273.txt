@@ -1,0 +1,5 @@
+3 3 6 6
+correct (3*(6+(6/3)))
+ablated_op (3+(6+(6/3)))
+ablated_number (8*(6+(6/3)))
+random (((3+3)+6)-6)

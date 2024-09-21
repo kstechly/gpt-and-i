@@ -1,0 +1,5 @@
+3 3 8 8
+correct (8/(3-(8/3)))
+ablated_op (8*(3-(8/3)))
+ablated_number (12/(3-(8/3)))
+random (((8-3)-8)/3)

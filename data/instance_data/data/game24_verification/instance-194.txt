@@ -1,0 +1,5 @@
+1 7 8 8
+correct ((1+7)+(8+8))
+ablated_op ((1-7)+(8+8))
+ablated_number ((1+10)+(8+8))
+random (((1+7)-8)-8)

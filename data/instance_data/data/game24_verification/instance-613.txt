@@ -1,0 +1,5 @@
+2 2 4 8
+correct (8+(4*(2*2)))
+ablated_op (8*(4*(2*2)))
+ablated_number (8+(4*(4*2)))
+random (((8/2)/4)-2)

@@ -1,0 +1,5 @@
+2 2 7 7
+correct (2*(7-(2-7)))
+ablated_op (2*(7+(2-7)))
+ablated_number (2*(8-(2-7)))
+random (((2*7)-2)/7)

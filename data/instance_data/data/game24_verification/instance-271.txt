@@ -1,0 +1,5 @@
+3 7 9 9
+correct ((3+9)*(9-7))
+ablated_op ((3+9)*(9*7))
+ablated_number ((9+9)*(9-7))
+random (((7-9)+9)*3)

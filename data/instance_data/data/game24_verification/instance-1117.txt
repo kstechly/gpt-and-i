@@ -1,0 +1,5 @@
+2 3 7 8
+correct ((2+7)/(3/8))
+ablated_op ((2/7)/(3/8))
+ablated_number ((2+7)/(3/9))
+random (((8*7)/2)/3)

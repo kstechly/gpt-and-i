@@ -1,0 +1,5 @@
+2 2 4 5
+correct ((2*2)+(4*5))
+ablated_op ((2*2)/(4*5))
+ablated_number ((1*2)+(4*5))
+random (((2*2)-4)/5)

@@ -1,0 +1,5 @@
+3 4 8 9
+correct (8*((3*4)-9))
+ablated_op (8-((3*4)-9))
+ablated_number (8*((3*4)-11))
+random (((3*9)*8)+4)

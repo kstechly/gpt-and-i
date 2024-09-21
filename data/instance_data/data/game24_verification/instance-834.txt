@@ -1,0 +1,5 @@
+3 4 6 12
+correct ((3*4)/(6/12))
+ablated_op ((3*4)-(6/12))
+ablated_number ((3*4)/(6/2))
+random (((6+4)-12)*3)

@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "gpt-and-i"
+version = "0.1.0"
+description = "Pipeline for testing self-verification abilities of LLMs on reasoning domains"
+authors = ["kstechly <kstechly@gmail.com>"]
+license = "MIT"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.8"
+openai = "^1.47.0"
+fire = "^0.6.0"
+rich = "^13.8.1"
+grinpy = "^19.7a0"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

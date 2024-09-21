@@ -1,0 +1,5 @@
+3 4 9 12
+correct (12*(9-(3+4)))
+ablated_op (12*(9-(3/4)))
+ablated_number (12*(5-(3+4)))
+random (((3*9)/12)*4)

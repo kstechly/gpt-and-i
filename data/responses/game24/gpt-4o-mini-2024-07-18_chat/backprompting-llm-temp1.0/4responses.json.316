@@ -1,0 +1,12 @@
+{
+    "prompts": [
+        "Use numbers and basic arithmetic operations (+ - * /) to obtain 24. You must write your response. Write your answer first, followed by [ANSWER END]\nInput: 2 2 8 12\nAnswer: ",
+        "Using each of the numbers 2 2 8 12 exactly as many times as they appear in the list and the basic arithmetic operations (+ - * /), it is possible to write an expression that evaluates to 24. Please check if the following expression uses only the correct numbers (and no others) and evaluates to 24: (12 / 2) * (8 / 2) = 24  \n[ANSWER END]\nIf it is not correct, please give feedback on what is wrong and how to correct it.\nRespond only in JSON format as described below:\n{\n   \"feedback\": \"feedback\",\n   \"correct\": boolean}\nEnsure that Python's json.loads can parse this.",
+        "stop10002"
+    ],
+    "responses": [
+        "(12 / 2) * (8 / 2) = 24  \n[ANSWER END]",
+        "{\n   \"feedback\": \"The expression (12 / 2) * (8 / 2) does use the numbers 12, 2, and 8 correctly; however, it uses the number 2 twice, which is acceptable. The expression itself evaluates to 24. Therefore, it is indeed a correct expression using the numbers provided.\",\n   \"correct\": true\n}"
+    ],
+    "stopped": true
+}

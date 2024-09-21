@@ -1,0 +1,5 @@
+2 4 9 13
+correct ((2+4)*(13-9))
+ablated_op ((2/4)*(13-9))
+ablated_number ((7+4)*(13-9))
+random (((2-13)-4)/9)

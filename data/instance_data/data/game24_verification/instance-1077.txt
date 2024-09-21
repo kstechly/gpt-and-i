@@ -1,0 +1,5 @@
+4 4 6 8
+correct (4*(8+(4-6)))
+ablated_op (4*(8+(4*6)))
+ablated_number (4*(4+(4-6)))
+random (((8*4)+4)-6)

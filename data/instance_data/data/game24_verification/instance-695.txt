@@ -1,0 +1,5 @@
+4 4 7 12
+correct ((4-7)*(4-12))
+ablated_op ((4+7)*(4-12))
+ablated_number ((4-7)*(4-1))
+random (((4+4)-7)/12)

@@ -1,0 +1,5 @@
+2 2 9 10
+correct (10-(2*(2-9)))
+ablated_op (10-(2/(2-9)))
+ablated_number (8-(2*(2-9)))
+random (((2+2)*9)*10)

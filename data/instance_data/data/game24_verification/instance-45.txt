@@ -1,0 +1,6 @@
+1 8 8 8
+correct ((1*8)+(8+8))
+ablated_op ((1+8)+(8+8))
+ablated_number ((1*10)+(8+8))
+random (((8-8)*1)-8)
+llm 8 * 8 - 8 * 1 = 24

@@ -1,0 +1,5 @@
+4 4 6 13
+correct ((4*(13-6))-4)
+ablated_op ((4/(13-6))-4)
+ablated_number ((4*(13-9))-4)
+random (((4+4)*13)/6)

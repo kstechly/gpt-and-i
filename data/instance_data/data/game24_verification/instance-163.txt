@@ -1,0 +1,5 @@
+2 8 8 12
+correct ((2*8)/(8/12))
+ablated_op ((2*8)-(8/12))
+ablated_number ((2*8)/(8/3))
+random (((2*8)/12)+8)
