@@ -13,8 +13,8 @@ def evaluate_plan(engine, domain_name, specified_instances=[], ignore_existing=F
     outputs_dir = f"responses/{domain_name}/{engine}/"
     evals_dir = f"evaluations/{domain_name}/{engine}/"
     if multiprompting:
-        outputs_dir+=f"backprompting-{multiprompting}{f'-temp{temp}' if temp else ''}/"
-        evals_dir+=f"backprompting-{multiprompting}{f'-temp{temp}' if temp else ''}/"
+        outputs_dir+=f"backprompting{f'-{multiprompting}' if multiprompting else ''}{f'-temp{temp}' if temp else ''}/"
+        evals_dir+=f"backprompting{f'-{multiprompting}' if multiprompting else ''}{f'-temp{temp}' if temp else ''}/"
     if problem_type:
         outputs_dir+=f"{problem_type}/"
         evals_dir+=f"{problem_type}/"
@@ -61,6 +61,8 @@ def evaluate_plan(engine, domain_name, specified_instances=[], ignore_existing=F
                 continue
 
             # Evaluate instance
+            print(instance)
+            print(output[instance])
             evaluations[instance] = domain.evaluate(instance_text, output[instance], problem_type, multiprompting)
             if verbose: print(f"==Evaluation for instance {instance}: ==\n{evaluations[instance]}")
 

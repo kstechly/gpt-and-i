@@ -47,13 +47,14 @@ def get_responses(engine, domain_name, specified_instances = [], run_till_comple
         with open(output_json, 'r') as file:
             # NOTE: the following json file should be a dictionary of dictionaries (each representing an instance), each containing three things: prompts (an ordered list of prompts), responses (an ordered list of corresponding responses), and stopped (a boolean of whether generation has been stopped on purpose yet)
             output = json.load(file)
+            print(f'loaded output file of len {len(output.keys())}')
             if ignore_existing:
                 stamp = str(time.time())
-                with open(f"{output_dir}output[instance] = instance_output-{stamp}.json","w") as file:
+                with open(f"{output_dir}-{stamp}.json","w") as file:
                     json.dump(output, file, indent=4)
                     output = {}
     def process_item(instance):
-        instance_output = {"prompts":[input[str(instance)]], "responses":[], "stopped":False}
+        instance_output = {"prompts":[input[str(instance)]], "responses":[], "stopped":False, "response_objects":[]}
         finished_prompts = 0
 
         # Load actual instance data
@@ -63,7 +64,7 @@ def get_responses(engine, domain_name, specified_instances = [], run_till_comple
                 instance_text = fp.read()
         except FileNotFoundError:
             print(f"{instance_location} not found. Skipping instance {instance} entirely.")
-            return
+            return 
 
         # Check if this instance is already complete
         if instance in output:
@@ -71,18 +72,24 @@ def get_responses(engine, domain_name, specified_instances = [], run_till_comple
             finished_prompts = len(instance_output["responses"])
             if instance_output["stopped"]:
                 if verbose: print(f"===Instance {instance} already completed===")
-                return
+                return instance_output
             elif finished_prompts >= multiprompt_num:
                 if verbose: print(f"===Instance {instance} already maxed out at {finished_prompts} out of {multiprompt_num} backprompts===")
-                return
+                return instance_output
             elif verbose: print(f"===Instance {instance} not complete yet. Continuing from backprompt {finished_prompts+1}===")
         elif verbose: print(f"===Instance {instance} has never been seen before===")
 
-        try: 
-            with open(f'{output_json}.{instance}','w') as file:
-                instance_output = json.load(file)
-        except: 
-            if verbose: print(f"No previous output to load for instance {instance}")
+        #try:
+        #    print(f'{output_json}.{instance}') 
+        #    with open(f'{output_json}.{instance}','w') as file:
+        #        instance_output = json.load(file)
+        #        output[instance] = instance_output
+        #        if verbose: print(f'loaded {instance_location} into output dict')
+        #        with open(f"{output_json}.tmp", 'w') as file:
+        #             json.dump(output, file, indent=4)
+        #        os.replace(f"{output_json}.tmp", output_json)
+        #except: 
+        #    if verbose: print(f"No previous output to load for instance {instance}")
 
 
         # Loop over the multiprompts until verifier stops or times out
@@ -91,7 +98,8 @@ def get_responses(engine, domain_name, specified_instances = [], run_till_comple
                 print(f"==Sending prompt {len(instance_output['prompts'])} of length {len(instance_output['prompts'][-1])} to LLM for instance {instance}==")
                 if verbose: print(instance_output["prompts"][-1])
                 # cost += len(instance_output['prompts'][-1])*0.00003/3
-                llm_response = send_query(instance_output["prompts"][-1], engine, MAX_GPT_RESPONSE_LENGTH, stop_statement=STOP_STATEMENT, temp=temp, model=model)
+                llm_response_full = send_query(instance_output["prompts"][-1], engine, MAX_GPT_RESPONSE_LENGTH, stop_statement=STOP_STATEMENT, temp=temp, model=model)
+                llm_response = llm_response_full.choices[0].message.content
                 if not llm_response:
                     failed_instances.append(instance)
                     print(f"==Failed instance: {instance}==")
@@ -99,6 +107,9 @@ def get_responses(engine, domain_name, specified_instances = [], run_till_comple
                 if verbose: print(f"==LLM response to prompt {len(instance_output['prompts'])} of instance {instance}: ==\n{llm_response}")
                 # cost += len(llm_response)*0.00006/3
                 instance_output["responses"].append(llm_response)
+                try: instance_output["response_objects"].append(json.loads(llm_response_full.model_dump_json()))
+                except:
+                    instance_output["response_objects"] = [json.loads(llm_response_full.model_dump_json())]
             if len(instance_output["prompts"]) == len(instance_output["responses"]) and multiprompting:
                 backprompt_query = domain.backprompt(instance_text, instance_output, multiprompting, problem_type)
                 try: pass
@@ -111,27 +122,40 @@ def get_responses(engine, domain_name, specified_instances = [], run_till_comple
                     instance_output["stopped"] = True
                     if verbose: print(f"==Stopping instance {instance} after {len(instance_output['responses'])} responses.==")
             # if verbose: print(f"***Current cost: {cost:.2f}***")
-            with open(f"{output_json}.{instance}.tmp", 'w') as file:
-                json.dump(instance_output, file, indent=4)
-            os.replace(f"{output_json}.{instance}.tmp", f'{output_json}.{instance}')
+            #with open(f"{output_json}.tmp", 'w') as file:
+            #    print(f'output len is {len(output.keys())}, writing')
+            #    json.dump(output, file, indent=4)
+            #os.replace(f"{output_json}.tmp", output_json)
+            #with open(f"{output_json}.{instance}.tmp", 'w') as file:
+            #    json.dump(instance_output, file, indent=4)
+            #os.replace(f"{output_json}.{instance}.tmp", f'{output_json}.{instance}')
             if instance_output["stopped"]: break
-        return instance_output, instance
+        return instance_output
         print(f"Instance {instance} processed")
+                
+
+
 
     # Loop over instances until done, multiproccessed
     while True:
         failed_instances = []
-        with concurrent.futures.ThreadPoolExecutor(max_workers=100) as executor:
-            thread_results = executor.map(process_item, input)
-        print("done?")
+        for instance in input:
+            processed = process_item(instance)
+            if processed: output[instance] = processed
+            with open(f"{output_json}.tmp", 'w') as file:
+                json.dump(output, file, indent=4)
+            os.replace(f"{output_json}.tmp", output_json)
+        #with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+        #    thread_results = executor.map(process_item, input)
+        #print("done?")
+        #try:
+        #    for x in thread_results:
+        #        if x: output[x[1]] = x[0]
+        #except Exception as e:
+        #    print(e)
         with open(f"{output_json}.tmp", 'w') as file:
             json.dump(output, file, indent=4)
         os.replace(f"{output_json}.tmp", output_json)
-        try:
-            for x in thread_results:
-                output[x[1]] = x[0]
-        except Exception as e:
-            print(e)
 		
 
         # Run till completion implementation
@@ -185,24 +209,25 @@ def send_query(query, engine, max_tokens, stop_statement="09h2309uharsuytbayuhfa
         eng = engine.split('_')[0]
         # print('chatmodels', eng)
         messages=[
-        {"role": "system", "content": "You are a constraint satisfaction solver that solves various CSP problems."},
+        #{"role": "system", "content": "You are a constraint satisfaction solver that solves various CSP problems."},
         {"role": "user", "content": query}
         ]
         try:
-            response = client.chat.completions.create(model=eng, messages=messages, temperature=temp, max_tokens=max_tokens, tool_choice=None)
+            response = client.chat.completions.create(model=eng, messages=messages)#, temperature=temp, max_tokens=max_tokens, tool_choice=None)
             text_response = response.choices[0].message.content
         except Exception as e:
             print("[-]: Failed GPT query execution: {}".format(e))
             text_response = ""
-            print("BUT! Trying safer token count...")
-            try:
-                response = client.chat.completions.create(model=eng, messages=messages, temperature=temp, max_tokens=MAX_GPT_RESPONSE_LENGTH_SAFE, tool_choice=None)
-                text_response = response.choices[0].message.content
-            except Exception as e:
-                print("Couldn't fix it, that's a huge rip man: {}".format(e))
+            #print("BUT! Trying safer token count...")
+            #try:
+            #    response = client.chat.completions.create(model=eng, messages=messages, temperature=temp, max_tokens=MAX_GPT_RESPONSE_LENGTH_SAFE, tool_choice=None)
+            #    text_response = response.choices[0].message.content
+            #except Exception as e:
+            #    print("Couldn't fix it, that's a huge rip man: {}".format(e))
         # print("====FINISH REASON====")
         # print(response.choices[0].finish_reason)
-        return text_response.strip()        
+        return response
+        #return text_response.strip()        
     elif 'llama' in engine:
         if model:
             response = generate_from_huggingfaceLLM(model['model'], model['tokenizer'], query, max_tokens, stop_statement=stop_statement)
