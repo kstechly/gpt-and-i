@@ -1,5 +1,0 @@
-2 3 5 11
-correct ((5+11)/(2/3))
-ablated_op ((5+11)*(2/3))
-ablated_number ((5+7)/(2/3))
-random (((5-11)/3)*2)

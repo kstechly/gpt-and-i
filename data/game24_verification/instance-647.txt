@@ -1,5 +1,0 @@
-1 1 7 10
-correct (10+(7*(1+1)))
-ablated_op (10-(7*(1+1)))
-ablated_number (30+(7*(1+1)))
-random (((1+1)+10)/7)

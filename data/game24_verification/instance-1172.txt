@@ -1,5 +1,0 @@
-3 3 8 13
-correct (3*(13+(3-8)))
-ablated_op (3*(13+(3*8)))
-ablated_number (3*(5+(3-8)))
-random (((13+3)+8)/3)

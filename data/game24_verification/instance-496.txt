@@ -1,5 +1,0 @@
-3 3 9 9
-correct ((3+3)+(9+9))
-ablated_op ((3/3)+(9+9))
-ablated_number ((10+3)+(9+9))
-random (((3-9)/3)/9)

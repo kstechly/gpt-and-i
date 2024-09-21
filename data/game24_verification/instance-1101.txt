@@ -1,5 +1,0 @@
-2 2 2 9
-correct (2+(2*(2+9)))
-ablated_op (2/(2*(2+9)))
-ablated_number (2+(2*(2+2)))
-random (((9*2)*2)+2)

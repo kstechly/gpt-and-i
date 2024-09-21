@@ -1,5 +1,0 @@
-1 2 2 13
-correct ((2*13)-(1*2))
-ablated_op ((2-13)-(1*2))
-ablated_number ((9*13)-(1*2))
-random (((1/2)+13)/2)

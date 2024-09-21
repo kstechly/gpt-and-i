@@ -1,5 +1,0 @@
-4 7 8 10
-correct (10+(8/(4/7)))
-ablated_op (10+(8-(4/7)))
-ablated_number (10+(8/(4/9)))
-random (((10/4)/8)-7)

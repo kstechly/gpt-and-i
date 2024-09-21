@@ -1,5 +1,0 @@
-1 7 8 12
-correct ((1-7)*(8-12))
-ablated_op ((1+7)*(8-12))
-ablated_number ((1-5)*(8-12))
-random (((7*1)+8)/12)

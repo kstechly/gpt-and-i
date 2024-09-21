@@ -1,5 +1,0 @@
-6 6 6 9
-correct ((6*6)*(6/9))
-ablated_op ((6*6)*(6*9))
-ablated_number ((3*6)*(6/9))
-random (((6*6)*9)*6)

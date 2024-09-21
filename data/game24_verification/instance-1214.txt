@@ -1,5 +1,0 @@
-3 5 9 10
-correct ((3+9)/(5/10))
-ablated_op ((3+9)+(5/10))
-ablated_number ((3+9)/(5/3))
-random (((3+5)/9)-10)

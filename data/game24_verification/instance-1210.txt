@@ -1,5 +1,0 @@
-2 6 8 9
-correct (8*((2*6)-9))
-ablated_op (8/((2*6)-9))
-ablated_number (3*((2*6)-9))
-random (((6/9)/2)-8)

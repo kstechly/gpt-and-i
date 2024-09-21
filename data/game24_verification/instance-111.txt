@@ -1,5 +1,0 @@
-1 6 6 11
-correct ((1+6)+(6+11))
-ablated_op ((1*6)+(6+11))
-ablated_number ((1+9)+(6+11))
-random (((1-6)-6)*11)

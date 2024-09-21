@@ -1,5 +1,0 @@
-2 2 6 11
-correct (6-(2*(2-11)))
-ablated_op (6*(2*(2-11)))
-ablated_number (7-(2*(2-11)))
-random (((11-6)-2)-2)

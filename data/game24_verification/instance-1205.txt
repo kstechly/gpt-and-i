@@ -1,5 +1,0 @@
-3 4 8 13
-correct ((13-4)/(3/8))
-ablated_op ((13-4)+(3/8))
-ablated_number ((2-4)/(3/8))
-random (((3/8)/13)-4)

@@ -1,5 +1,0 @@
-4 5 7 10
-correct (4-(10*(5-7)))
-ablated_op (4+(10*(5-7)))
-ablated_number (4-(10*(6-7)))
-random (((4*5)*7)*10)

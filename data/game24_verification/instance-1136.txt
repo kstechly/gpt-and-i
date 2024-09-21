@@ -1,5 +1,0 @@
-3 3 4 13
-correct ((3*(13-4))-3)
-ablated_op ((3*(13/4))-3)
-ablated_number ((3*(13-9))-3)
-random (((13-4)+3)-3)

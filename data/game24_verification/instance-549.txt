@@ -1,5 +1,0 @@
-2 4 5 13
-correct ((2+4)+(5+13))
-ablated_op ((2/4)+(5+13))
-ablated_number ((2+4)+(5+7))
-random (((2*5)-13)+4)

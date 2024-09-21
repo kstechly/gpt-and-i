@@ -1,5 +1,0 @@
-3 3 6 11
-correct ((3*11)-(3+6))
-ablated_op ((3/11)-(3+6))
-ablated_number ((8*11)-(3+6))
-random (((3*6)*11)*3)

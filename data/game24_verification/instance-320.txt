@@ -1,5 +1,0 @@
-1 2 3 6
-correct (3*(6+(1*2)))
-ablated_op (3*(6/(1*2)))
-ablated_number (3*(4+(1*2)))
-random (((6+3)+1)-2)

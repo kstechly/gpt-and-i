@@ -1,5 +1,0 @@
-4 5 9 12
-correct (9+(12/(4/5)))
-ablated_op (9/(12/(4/5)))
-ablated_number (9+(3/(4/5)))
-random (((5-9)/12)*4)

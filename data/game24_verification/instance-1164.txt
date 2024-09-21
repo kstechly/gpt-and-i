@@ -1,5 +1,0 @@
-4 5 7 13
-correct ((4-7)*(5-13))
-ablated_op ((4+7)*(5-13))
-ablated_number ((4-7)*(5-4))
-random (((5+4)+13)+7)

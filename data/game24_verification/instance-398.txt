@@ -1,5 +1,0 @@
-2 9 9 11
-correct (2*(11+(9/9)))
-ablated_op (2*(11/(9/9)))
-ablated_number (2*(11+(4/9)))
-random (((9+11)+2)+9)

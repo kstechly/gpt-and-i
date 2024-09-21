@@ -1,5 +1,0 @@
-2 3 6 12
-correct ((2*3)+(6+12))
-ablated_op ((2*3)/(6+12))
-ablated_number ((2*3)+(6+5))
-random (((6/2)*3)*12)

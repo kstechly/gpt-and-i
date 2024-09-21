@@ -1,5 +1,0 @@
-2 4 5 5
-correct (4+(2*(5+5)))
-ablated_op (4+(2/(5+5)))
-ablated_number (4+(7*(5+5)))
-random (((4+5)+5)/2)

@@ -1,5 +1,0 @@
-3 6 7 12
-correct (12*((3+6)-7))
-ablated_op (12+((3+6)-7))
-ablated_number (2*((3+6)-7))
-random (((6*3)/12)-7)

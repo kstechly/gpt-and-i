@@ -1,5 +1,0 @@
-2 5 5 11
-correct ((5*(2+5))-11)
-ablated_op ((5-(2+5))-11)
-ablated_number ((9*(2+5))-11)
-random (((5/5)*11)+2)

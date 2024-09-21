@@ -1,5 +1,0 @@
-4 6 8 13
-correct (8*(13-(4+6)))
-ablated_op (8/(13-(4+6)))
-ablated_number (1*(13-(4+6)))
-random (((13*6)+8)/4)

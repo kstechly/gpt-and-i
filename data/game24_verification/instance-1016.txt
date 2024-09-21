@@ -1,5 +1,0 @@
-4 6 7 12
-correct ((6*12)/(7-4))
-ablated_op ((6*12)/(7*4))
-ablated_number ((6*1)/(7-4))
-random (((7/6)*12)*4)

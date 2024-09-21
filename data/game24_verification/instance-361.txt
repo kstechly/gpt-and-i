@@ -1,5 +1,0 @@
-4 7 7 7
-correct (4*(7-(7/7)))
-ablated_op (4*(7/(7/7)))
-ablated_number (7*(7-(7/7)))
-random (((7*7)*4)+7)

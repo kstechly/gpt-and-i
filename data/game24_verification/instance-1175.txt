@@ -1,5 +1,0 @@
-2 3 6 7
-correct (3+(7/(2/6)))
-ablated_op (3/(7/(2/6)))
-ablated_number (3+(12/(2/6)))
-random (((2-7)*6)/3)

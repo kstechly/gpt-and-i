@@ -1,5 +1,0 @@
-1 2 3 10
-correct (3*(10-(1*2)))
-ablated_op (3*(10+(1*2)))
-ablated_number (6*(10-(1*2)))
-random (((3/2)*1)+10)

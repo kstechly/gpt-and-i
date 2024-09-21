@@ -1,5 +1,0 @@
-1 5 5 12
-correct (12*(1+(5/5)))
-ablated_op (12*(1+(5-5)))
-ablated_number (3*(1+(5/5)))
-random (((12/5)/5)/1)

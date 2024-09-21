@@ -1,5 +1,0 @@
-1 1 2 9
-correct ((1+2)*(9-1))
-ablated_op ((1+2)/(9-1))
-ablated_number ((1+2)*(8-1))
-random (((2+1)-1)*9)

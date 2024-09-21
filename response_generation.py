@@ -2,7 +2,6 @@ import os
 import argparse
 import time
 import json
-import time
 from tqdm import tqdm
 from openai import OpenAI
 import concurrent.futures

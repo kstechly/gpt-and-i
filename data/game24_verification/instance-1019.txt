@@ -1,5 +1,0 @@
-4 5 6 13
-correct (6*(13-(4+5)))
-ablated_op (6-(13-(4+5)))
-ablated_number (6*(13-(6+5)))
-random (((13-5)+6)+4)

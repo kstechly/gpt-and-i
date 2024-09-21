@@ -1,5 +1,0 @@
-4 8 9 13
-correct ((8/4)+(9+13))
-ablated_op ((8+4)+(9+13))
-ablated_number ((8/4)+(7+13))
-random (((9/13)+8)*4)

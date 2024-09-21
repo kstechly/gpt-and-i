@@ -1,5 +1,0 @@
-3 5 7 9
-correct ((3+5)+(7+9))
-ablated_op ((3-5)+(7+9))
-ablated_number ((3+5)+(4+9))
-random (((5/9)+3)-7)

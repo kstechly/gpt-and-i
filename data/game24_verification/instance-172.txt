@@ -1,5 +1,0 @@
-1 2 4 4
-correct (4*(4+(1*2)))
-ablated_op (4+(4+(1*2)))
-ablated_number (4*(4+(1*12)))
-random (((1*2)/4)-4)

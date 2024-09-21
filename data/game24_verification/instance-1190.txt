@@ -1,5 +1,0 @@
-2 3 7 10
-correct ((2*10)-(3-7))
-ablated_op ((2-10)-(3-7))
-ablated_number ((9*10)-(3-7))
-random (((10+3)+2)*7)

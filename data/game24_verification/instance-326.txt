@@ -1,5 +1,0 @@
-4 4 5 5
-correct ((5*5)-(4/4))
-ablated_op ((5-5)-(4/4))
-ablated_number ((9*5)-(4/4))
-random (((4/5)*5)/4)

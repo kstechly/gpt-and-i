@@ -1,5 +1,0 @@
-3 3 5 10
-correct ((3*3)+(5+10))
-ablated_op ((3*3)*(5+10))
-ablated_number ((1*3)+(5+10))
-random (((3-3)+10)-5)

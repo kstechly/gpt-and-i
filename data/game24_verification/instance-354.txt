@@ -1,5 +1,0 @@
-4 8 8 8
-correct (8+(8/(4/8)))
-ablated_op (8+(8+(4/8)))
-ablated_number (1+(8/(4/8)))
-random (((8*8)+8)/4)

@@ -1,5 +1,0 @@
-6 8 9 12
-correct (12+(9/(6/8)))
-ablated_op (12+(9+(6/8)))
-ablated_number (12+(7/(6/8)))
-random (((9/12)+6)+8)

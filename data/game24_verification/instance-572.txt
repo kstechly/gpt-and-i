@@ -1,5 +1,0 @@
-3 3 4 12
-correct ((4*(3*3))-12)
-ablated_op ((4*(3*3))/12)
-ablated_number ((4*(3*3))-4)
-random (((3+4)*12)/3)

@@ -1,5 +1,0 @@
-4 6 8 9
-correct ((4*6)*(9-8))
-ablated_op ((4*6)*(9*8))
-ablated_number ((4*6)*(9-7))
-random (((6*8)/4)*9)

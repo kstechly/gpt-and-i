@@ -1,5 +1,0 @@
-1 4 5 11
-correct ((1*4)*(11-5))
-ablated_op ((1+4)*(11-5))
-ablated_number ((1*4)*(11-2))
-random (((1*5)+11)*4)

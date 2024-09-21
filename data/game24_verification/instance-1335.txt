@@ -1,5 +1,0 @@
-6 9 9 10
-correct (9+(10/(6/9)))
-ablated_op (9*(10/(6/9)))
-ablated_number (9+(4/(6/9)))
-random (((9-10)-6)*9)

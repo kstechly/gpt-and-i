@@ -1,5 +1,0 @@
-2 4 6 8
-correct ((2/4)*(6*8))
-ablated_op ((2/4)-(6*8))
-ablated_number ((4/4)*(6*8))
-random (((8/2)+6)+4)

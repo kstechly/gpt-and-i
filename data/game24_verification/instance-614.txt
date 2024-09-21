@@ -1,5 +1,0 @@
-3 6 7 9
-correct ((3*7)-(6-9))
-ablated_op ((3*7)+(6-9))
-ablated_number ((3*7)-(8-9))
-random (((9-7)-3)-6)
