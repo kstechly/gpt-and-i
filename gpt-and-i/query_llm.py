@@ -2,8 +2,8 @@ import os
 import argparse
 import time
 import json
-from tqdm import tqdm
-from openai import OpenAI
+from fire import Fire #type: ignore
+from openai import OpenAI #type: ignore
 import concurrent.futures
 
 client = OpenAI()

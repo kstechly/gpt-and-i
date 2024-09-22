@@ -15,3 +15,8 @@ domains = {"graph_coloring":graph_coloring,"color_verification":color_verificati
 #       (returns natural language backprompt in response to a query)
 #
 # Instance data for the ith instance must be stored in data/{domain_name}/instance-{i}.{file_ending()}
+
+def get_domain(domain_name):
+    if domain_name not in domains:
+        raise ValueError(f"Domain name must be an element of {list(domains)}.")
+    return domains[domain_name]
