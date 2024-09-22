@@ -3,7 +3,7 @@ PROMPT_SPLITTER = "Please do not provide anything else in your response, and end
 DEFAULT_PROMPT_END = "Please provide each vertex's color. Do not skip any vertices. Each color must be provided on a new line in the response and should be formatted as \"{VERTEX NUMBER}: {VERTEX COLOR ASSIGNMENT}\". " + PROMPT_SPLITTER
 
 CHROMATIC_NUMBER_KEY = "OPTIMAL CHROMATIC NUMBER === "
-GRAPH_COLORING_DIRECTORY = "../data/graph_coloring/"
+GRAPH_COLORING_DIRECTORY = "../../data/instances/graph_coloring/"
 
 STOP_PHRASE = "Verifier confirmed success."
 
@@ -11,10 +11,10 @@ INITIAL_NODES = 3
 NEIGHBOR_P = .4
 SOURCE_P = .2
 
-import grinpy
+import grinpy #type: ignore
 import os
 import argparse
-import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt #type: ignore
 import json
 import time
 import re
@@ -25,8 +25,8 @@ import random
 def generate_cot_prompt(instance_text, coloring_text):
     prompt = ''
     prompt+= '\n[Instructions]\nWhen outputting your final answer, first print the [Answer] tag, then put your final answer after the [Answer] tag. Respond only in the following format:\nWrong Edges: a list of incorrect edges\nAll Vertices Colored: boolean representing if every vertex is colored\nOptimal Or Less: boolean representing if the number of colors is no more than the optimal\nCorrect: boolean'
-    prompt+= f"\n\n[Graph]\nThe following graph, described as a set of edges, has an optimal coloring number of {graph_coloring.optimal_coloring_number(instance_text)}:\n"
-    _, graph_text = graph_coloring.generate_graph(instance_text)
+    prompt+= f"\n\n[Graph]\nThe following graph, described as a set of edges, has an optimal coloring number of {optimal_coloring_number(instance_text)}:\n"
+    _, graph_text = generate_graph(instance_text)
     prompt+= graph_text
     prompt+= f"\n[Coloring]\nA coloring is correct if no adjacent vertices are the same color and the total number of colors used is no more than the optimal coloring number. Please check if this coloring is correct: {coloring_text}"
     prompt+= f"\n\nLet's think step by step. Remember to output your final answer in the format described in the instructions.\n[Thoughts]"
@@ -97,10 +97,10 @@ def evil_check_coloring(model_response, instance_text):
 def generate_random_graph(num_nodes, edge_p):
     graph_attempt = grinpy.gnp_random_graph(num_nodes, edge_p)
     num_tries = 1
-    while not grinpy.is_planar(graph_attempt):
-        graph_attempt = grinpy.gnp_random_graph(num_nodes, edge_p)
-        print(f"Try #{num_tries}")
-        num_tries+=1
+    # while not grinpy.is_planar(graph_attempt):
+    graph_attempt = grinpy.gnp_random_graph(num_nodes, edge_p)
+        # if str(num_tries)[2:] == '0'*(len(str(num_tries))-2) :print(f"Try #{num_tries}")
+        # num_tries+=1
     return graph_attempt
 
 def generate_graph(instance_text):
@@ -279,7 +279,18 @@ def backprompt(instance_text, instance_output, backprompt_type, *args):
                 return f"Vertex {correct_edges[edge_num][0]} and vertex {correct_edges[edge_num][1]} were both colored {coloring[correct_edges[edge_num][0]]} despite being connected by an edge.\nThis is wrong. Please recolor. {DEFAULT_PROMPT_END}"
  
     else: raise NotImplementedError
-    
+
+
+# generate function
+def generate_instances(start, end, total_nodes): #TODO make this num instead
+    instances = {}
+    for x in range(start, end+1):
+        dimacs = ""
+        graph = grinpy.to_edgelist(generate_random_graph(total_nodes, NEIGHBOR_P))
+        dimacs = construct_dimacs(graph)
+        dimacs += f"\nc {CHROMATIC_NUMBER_KEY}{optimal_coloring_number(dimacs)}"
+        instances[x] = dimacs
+
 
 #### Precompute and instance generation scripts
 # WARNING: Only works from domain_utils directory
@@ -295,6 +306,7 @@ if __name__ == "__main__":
     task = args.task
     start = args.start
     end = args.end
+    n_p = args.probability
     total_nodes = args.total
     if task == "chromatic":
         print(f"Precomputing chromatic numbers for all instances in {GRAPH_COLORING_DIRECTORY}")
@@ -314,7 +326,7 @@ if __name__ == "__main__":
         for x in range(start, end+1):
             destination = f"{GRAPH_COLORING_DIRECTORY}instance-{x}.col"
             dimacs = ""
-            graph = grinpy.to_edgelist(generate_random_graph(total_nodes, NEIGHBOR_P))
+            graph = grinpy.to_edgelist(generate_random_graph(total_nodes, n_p))
             dimacs = construct_dimacs(graph)
             dimacs += f"\nc {CHROMATIC_NUMBER_KEY}{optimal_coloring_number(dimacs)}"
             with open(destination, "w") as fp:
