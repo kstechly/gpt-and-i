@@ -32,6 +32,14 @@ def read_json(domain_name, overwrite_previous, data_type, verbose=False, strange
         if verbose: print(f"{location} does not exist. Returning empty dictionary.")
         return {}
 
+### instance utils
+def read_instance(domain_name,number_of_instance,file_ending):
+    try:
+        with open(f"data/instances/{domain_name}/instance-{number_of_instance}{file_ending}") as fp:
+            return fp.read()
+    except FileNotFoundError:
+        print(f"data/instances/{domain_name}/instance-{number_of_instance} not found.")
+
 ### pickle utils
 def load_pickle(file_loc):
     with open(file_loc, "rb") as fp:
