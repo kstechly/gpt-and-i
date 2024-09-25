@@ -3,7 +3,7 @@ PROMPT_SPLITTER = "Please do not provide anything else in your response, and end
 DEFAULT_PROMPT_END = "Please provide each vertex's color. Do not skip any vertices. Each color must be provided on a new line in the response and should be formatted as \"{VERTEX NUMBER}: {VERTEX COLOR ASSIGNMENT}\". " + PROMPT_SPLITTER
 
 CHROMATIC_NUMBER_KEY = "OPTIMAL CHROMATIC NUMBER === "
-GRAPH_COLORING_DIRECTORY = "../../data/instances/graph_coloring/"
+GRAPH_COLORING_DIRECTORY = "data/instances/graph_coloring/"
 
 STOP_PHRASE = "Verifier confirmed success."
 
@@ -177,7 +177,18 @@ def evaluate(instance_text, response_trace, problem_type="", backprompt_type="")
         evaluation = list(evaluation[:-1])
     return evaluation
 
-def backprompt(instance_text, instance_output, backprompt_type, *args):
+def get_instance_text(problem_id):
+    with open(f"{GRAPH_COLORING_DIRECTORY}instance-{problem_id}.col","r") as fp:
+        return fp.read()
+
+def convert_instance_to_old_format(instance):
+    instance_text = get_instance_text(instance[-1]["problem_id"])
+    instance_output = {"prompts":[instance[x]["prompt"] for x in range(0,len(instance))], "responses":[instance[x]["response"] for x in range(0,len(instance))]}
+    backprompt_type = instance[-1]["backprompt_type"]
+    return instance_text, instance_output, backprompt_type
+
+def backprompt(instance):
+    instance_text, instance_output, backprompt_type = convert_instance_to_old_format(instance)
     model_response = instance_output["responses"][-1]
     if backprompt_type=="llm-cot":
         if len(instance_output["responses"])%2==0:
@@ -202,6 +213,21 @@ def backprompt(instance_text, instance_output, backprompt_type, *args):
             backprompt += model_response
             backprompt += f"\n\nUsing this feedback, please try again. {DEFAULT_PROMPT_END}"
             return backprompt       
+        else:
+            # Return checking prompt for odd numbered responses
+            backprompt_query = f"The following graph, described as a set of edges, has an optimal coloring number of {optimal_coloring_number(instance_text)}:\n"
+            num_verts, graph_text = generate_graph(instance_text)
+            backprompt_query+= graph_text
+            backprompt_query+= f"Please check if this coloring is correct:" +model_response
+            backprompt_query+= f"\nIf it is, say '{STOP_PHRASE}' Do not provide anything else in your response. If it is incorrect, please point out which same-color vertices share an edge."
+            return backprompt_query
+    if backprompt_type=="llm-passfail":
+        #free form feedback from the llm
+        if len(instance_output["responses"])%2==0:
+            # Return generation prompt for even numbered responses, but first check for the stop phrase
+            if STOP_PHRASE in model_response:
+                return "stop10002"
+            return f"{concat_trace(instance_output)}Feedback: This is not correct. Using the previously provided graph, please provide a correct coloring. {DEFAULT_PROMPT_END}"       
         else:
             # Return checking prompt for odd numbered responses
             backprompt_query = f"The following graph, described as a set of edges, has an optimal coloring number of {optimal_coloring_number(instance_text)}:\n"
@@ -260,7 +286,42 @@ def backprompt(instance_text, instance_output, backprompt_type, *args):
     if backprompt_type == "think":
         return instance_output["prompts"][0]+"\n Let's think step by step."
     check, reasons = check_coloring(model_response, instance_text)
+    if backprompt_type == "llm+full":
+        #LLM verifies, sound critique provides full feedback
+        if len(instance_output["responses"])%2==0:
+            # Return generation prompt for even numbered responses, but first check for the stop phrase
+            if STOP_PHRASE in model_response:
+                return "stop10002"
+            backprompt = concat_trace(instance_output, divisor=2)
+            backprompt += "This is incorrect. Feedback:\n"
+            backprompt += " ".join(reasons)
+            backprompt += f"\n\nThis is wrong. Please recolor. {DEFAULT_PROMPT_END}"
+            return backprompt       
+        else:
+            # Return checking prompt for odd numbered responses
+            backprompt_query = f"The following graph, described as a set of edges, has an optimal coloring number of {optimal_coloring_number(instance_text)}:\n"
+            num_verts, graph_text = generate_graph(instance_text)
+            backprompt_query+= graph_text
+            backprompt_query+= f"Please check if this coloring is correct:" +model_response
+            backprompt_query+= f"\nIf it is, say '{STOP_PHRASE}' Do not provide anything else in your response. If it is incorrect, please point out which same-color vertices share an edge."
+            return backprompt_query
     if check: return STOP_PHRASE
+    elif backprompt_type == "sound+llm":
+        # Sound verifier with LLM feedback
+        if len(instance_output["responses"])%2==0:
+            backprompt = concat_trace(instance_output, divisor=2)
+            backprompt += "This is incorrect. Feedback:\n"
+            backprompt += model_response
+            backprompt += f"\n\nThis is wrong. Please recolor. {DEFAULT_PROMPT_END}"
+            return backprompt       
+        else:
+            # Return checking prompt for odd numbered responses
+            backprompt_query = f"The following graph, described as a set of edges, has an optimal coloring number of {optimal_coloring_number(instance_text)}:\n"
+            num_verts, graph_text = generate_graph(instance_text)
+            backprompt_query+= graph_text
+            backprompt_query+= f"Please check if this coloring is correct:" +model_response
+            backprompt_query+= f"\nIf it is, say '{STOP_PHRASE}' Do not provide anything else in your response. If it is incorrect, please point out which same-color vertices share an edge."
+            return backprompt_query
     elif backprompt_type == "top-stop": return instance_output["prompts"][0]
     elif backprompt_type == "passfail": return f"{concat_trace(instance_output)}Feedback: This is not correct. Using the previously provided graph, please provide a correct coloring. {DEFAULT_PROMPT_END}"
     elif backprompt_type == "first": return f"{concat_trace(instance_output)}Feedback: {reasons[0]}\nThis is wrong. Please recolor. {DEFAULT_PROMPT_END}"
