@@ -25,7 +25,6 @@ def calculate_indeps(fpr, tpr, g, n):
 
     print(f"n at which less than {cutoff} diff: {n_end}")
 
-
 n=15
 
 print("g24")
