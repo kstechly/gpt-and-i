@@ -3,20 +3,20 @@ import os
 import time
 import pickle
 from itertools import chain
-from rich.progress import TextColumn, MofNCompleteColumn, Progress, BarColumn, TimeElapsedColumn, TimeRemainingColumn  #type: ignore
-from rich.table import Column #type: ignore
-import pandas as pd #type: ignore
+from rich.progress import TextColumn, MofNCompleteColumn, Progress, BarColumn, TimeElapsedColumn, TimeRemainingColumn 
+from rich.table import Column 
+import pandas as pd
 
 ### json utils
-def write_json(domain_name,text_to_write,data_type):
+def write_json(domain_name,dict_to_write,data_type):
     directory = f"data/{data_type}/{domain_name}"
     os.makedirs(directory, exist_ok=True)
     location = f"{directory}/{data_type}.json"
     with open(f'{location}.tmp',"w") as fp:
-        json.dump(text_to_write, fp, indent = 4)
+        json.dump(dict_to_write, fp, indent = 4)
     os.replace(f'{location}.tmp', location)
 
-def read_json(domain_name, overwrite_previous, data_type, verbose=False, strange_subloc=""):
+def read_json(domain_name, overwrite_previous, data_type, verbose=False, strange_subloc="", remove=False):
     location = f"data/{data_type}/{domain_name}/{data_type}.json"
     if strange_subloc:
         location = f"data/{data_type}/{domain_name}/{strange_subloc}"
@@ -27,10 +27,59 @@ def read_json(domain_name, overwrite_previous, data_type, verbose=False, strange
             stamp = str(time.time())
             with open(f"data/{data_type}/{domain_name}/{data_type}-{stamp}.json.old","w") as file:
                 json.dump(previous, file, indent=4)
+        elif remove:
+            stamp = str(time.time())
+            new_name = location.replace(".json",f"-{stamp}.json.old")
+            os.rename(location, new_name)
         return previous
     else:
         if verbose: print(f"{location} does not exist. Returning empty dictionary.")
         return {}
+
+### jsonl utils
+#### these require data to be in unstructured lists
+def write_jsonl(domain_name, item_to_write, data_type, llm=""):
+    directory = f"data/{data_type}/{domain_name}/{llm}"
+    os.makedirs(directory, exist_ok=True)
+    location = f"{directory}/{data_type}.jsonl"
+    with open(location, "a") as file:
+        file.write(json.dumps(item_to_write) + "\n")
+
+def read_jsonl(domain_name, data_type, llm="", verbose=False):
+    location = f"data/{data_type}/{domain_name}/{llm}/{data_type}.jsonl"
+    if not os.path.exists(location):
+        if verbose: print(f"{location} does not exist. Returning empty list.")
+        return []
+    with open(location, 'r') as file:
+        previous = [json.loads(line) for line in file]
+    return previous
+
+def update_format_to_jsonl(domain_name, overwrite_previous, data_type, llm, backprompt_type, temp, trial_num=0, verbose=False):
+    prompting_details = f"backprompting-{backprompt_type}{f'-temp{temp}' if temp else ''}"
+    subloc=f"{llm}_chat/{prompting_details}/{trial_num if trial_num else ''}{data_type}.json"
+    original_location = f"data/{data_type}/{domain_name}/{subloc}"
+    if not os.path.exists(original_location):
+        if verbose: print(f"[!]: Nothing to update to new format. ({original_location} does not exist.)")
+        return None
+    old_data = read_json(domain_name, False, data_type, verbose, strange_subloc=subloc, remove=True)
+    instance_data = [{"problem_id":key, "trial_num":f"{int(trial_num) if trial_num else 0}", **old_data[key]} for key in old_data.keys()]
+    new_data = []
+    for instance in instance_data:
+        response_list = [{**{k: instance[k] for k in instance.keys() - {'responses', 'prompts'}}, "prompt_num":n,
+                          "prompt":instance["prompts"][n], "response":instance["responses"][n],
+                          "backprompt_type":backprompt_type, "temp": temp, "converted_data": True,
+                          "llm": llm}
+                         for n in range(0,len(instance["responses"]))]
+        new_data = new_data + response_list
+    if overwrite_previous:
+        backup_and_remove_jsonl(original_location)
+    for item in new_data:
+        write_jsonl(domain_name, item, data_type, llm=llm)
+
+def backup_and_remove_jsonl(old_name):
+    stamp = str(time.time())
+    new_name = old_name.replace(".jsonl",f"-{stamp}.jsonl.old")
+    os.rename(old_name, new_name)
 
 ### instance utils
 def read_instance(domain_name,number_of_instance,file_ending):
