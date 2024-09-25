@@ -1,9 +1,10 @@
-.vscode/launch.json
+.vscode/*
 *.pyc
 old_runs/
 *.sh
 *-old_format*
 *.tmp
+*.old
 
 # Exclude notes
 *.todo
