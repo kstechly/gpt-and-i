@@ -139,7 +139,7 @@ def get_responses(llm, domain_name, start=0, end=0, overwrite_previous=False, ve
         maxed_out = 0
         completed_tasks = 0
         with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-            print(f">>Deploying {min(MAX_WORKERS, total_tasks)} undergrads to process {total_tasks} instances.")
+            print(f">>Deploying {min(MAX_WORKERS, len(input))} undergrads to process {len(input)} instances.")
             futures = {executor.submit(process_instance, instance, domain_name, verbose) for instance in input}
             while futures and cost < max_cost:
                 done, _ = wait(futures, return_when=FIRST_COMPLETED)
@@ -154,6 +154,7 @@ def get_responses(llm, domain_name, start=0, end=0, overwrite_previous=False, ve
                         if verbose: print(f">>Instance {new_instance[-1]['problem_id']} advanced successfully to iteration {new_instance[-1]['prompt_num']}.")
                         cost+=new_instance[-1]["response_object"]["usage"]["prompt_tokens"]*input_costs_per_token[llm] + new_instance[-1]["response_object"]["usage"]["completion_tokens"]*output_costs_per_token[llm]
                         completed_tasks += 1
+                    progress.update(task, advance=1, description=f"Processing... ${cost:.2f} ({len(futures)+1} tasks in queue. {completed_tasks} tasks completed)")
                     if len(new_instance) >= num_iterations:
                         maxed_out +=1
                         if verbose: print(f">>Instance {new_instance[-1]['problem_id']} reached maximum iterations ({len(new_instance)}).")
@@ -161,9 +162,8 @@ def get_responses(llm, domain_name, start=0, end=0, overwrite_previous=False, ve
                     elif new_instance[-1]["stopped"]:
                         stopped +=1
                         if verbose: print(f">>Instance {new_instance[-1]['problem_id']} stopped successfully.")
-                        progress.update(task, advance=num_iterations-len(new_instance), description=f"Processing... ${cost:.2f} ({len(futures)} tasks in queue. {completed_tasks} tasks completed)")
+                        progress.update(task, advance=num_iterations-len(new_instance), description=f"Processing... ${cost:.2f} ({len(futures)+1} tasks in queue. {completed_tasks} tasks completed)")
                         continue
-                    progress.update(task, advance=1, description=f"Processing... ${cost:.2f} ({len(futures)} tasks in queue. {completed_tasks} tasks completed)")
                     futures.add(executor.submit(process_instance, new_instance, domain_name, verbose))
     print(f">>Complete. Total cost: ${cost}\n>>Number of failed instances: {failed}\n>>Number of stopped instances: {stopped}\n>>Number of maxed out instances (at {num_iterations} iterations): {maxed_out}")
 
