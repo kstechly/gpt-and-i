@@ -305,7 +305,7 @@ def backprompt(instance):
             backprompt_query+= f"Please check if this coloring is correct:" +model_response
             backprompt_query+= f"\nIf it is, say '{STOP_PHRASE}' Do not provide anything else in your response. If it is incorrect, please point out which same-color vertices share an edge."
             return backprompt_query
-    if check: return STOP_PHRASE
+    if check: return "stop10002"
     elif backprompt_type == "sound+llm":
         # Sound verifier with LLM feedback
         if len(instance_output["responses"])%2==0:
