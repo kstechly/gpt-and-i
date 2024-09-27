@@ -142,3 +142,22 @@ def includes_sub_dict(a, b):
         if all(a[k] == b[k] for k in b.keys()): return True
     except: return False
     return False
+
+### LLM cost utils
+costs_per_million = {
+    'gpt-4': (30, 60),
+    'gpt-4-0613': (30, 60),
+    'gpt-4-turbo': (10, 30),
+    'gpt-4-turbo-2024-04-09': (10, 30),
+    'gpt-3.5-turbo-0125': (0.5, 1.5),
+    'gpt-4o-2024-05-13': (5, 15),
+    'gpt-4o-mini-2024-07-18': (0.15, 0.6),
+    'o1-preview': (15, 60)
+    }
+
+def known_llm(llm):
+    known = llm in costs_per_million.keys()
+    if not known: print(f"[-]: Invalid llm name. Must be one of {costs_per_million.keys()}.")
+    return known
+def calculate_token_cost(llm, input_tokens, output_tokens):
+    return (input_tokens * costs_per_million[llm][0] + output_tokens * costs_per_million[llm][1]) / 10**6

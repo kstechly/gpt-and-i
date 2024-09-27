@@ -14,27 +14,6 @@ STOP_PHRASE = "stop10002" # "Verifier confirmed success" # what the verifier has
 STOP_STATEMENT = "[ANSWER END]" # what we look for to end LLM response generation
 MAX_WORKERS = 1000
 
-input_costs_per_million  = {
-    "gpt-4": 30,
-    "gpt-4-0613": 30, 
-    "gpt-4-turbo":10, 
-    "gpt-4-turbo-2024-04-09": 10, 
-    "gpt-3.5-turbo-0125": 0.5, 
-    "gpt-4o-2024-05-13": 5, 
-    "gpt-4o-mini-2024-07-18":0.15,
-    "o1-preview":15}
-output_costs_per_million = {
-    "gpt-4": 60,
-    "gpt-4-0613": 60, 
-    "gpt-4-turbo":30, 
-    "gpt-4-turbo-2024-04-09": 30, 
-    "gpt-3.5-turbo-0125": 1.5, 
-    "gpt-4o-2024-05-13": 15, 
-    "gpt-4o-mini-2024-07-18": 0.6,
-    "o1-preview":60}
-input_costs_per_token = {llm: input_costs_per_million[llm]/10**6 for llm in input_costs_per_million}
-output_costs_per_token = {llm: output_costs_per_million[llm]/10**6 for llm in output_costs_per_million}
-
 def check_spec(line, key, llm, backprompt_type, temp, trial_num):
     return line["llm"] == llm and line["backprompt_type"] == backprompt_type and line["temp"] == temp and int(line["trial_num"]) == int(trial_num) and int(line["problem_id"]) == int(key)
 
@@ -106,9 +85,7 @@ def send_query(query, llm, max_tokens=MAX_GPT_RESPONSE_LENGTH, temp=1):
     return response, response_dict
 
 def get_responses(llm, domain_name, start=0, end=0, overwrite_previous=False, verbose=False, multiprompting="", num_iterations=15, temp=1, trial_id=0, max_cost=100):
-    if llm not in input_costs_per_million:
-        print(f"[-]: Invalid llm name. Must be one of {input_costs_per_million.keys()}.")
-        return
+    if not utils.known_llm(llm): return
     prompts = utils.read_json(domain_name, overwrite_previous=False, data_type="prompts")
 
     # Constrain work to only specified instances if flagged to do so
@@ -152,7 +129,7 @@ def get_responses(llm, domain_name, start=0, end=0, overwrite_previous=False, ve
                     else:
                         utils.write_jsonl(domain_name, new_instance[-1], "responses", llm=llm)
                         if verbose: print(f">>Instance {new_instance[-1]['problem_id']} advanced successfully to iteration {new_instance[-1]['prompt_num']}.")
-                        cost+=new_instance[-1]["response_object"]["usage"]["prompt_tokens"]*input_costs_per_token[llm] + new_instance[-1]["response_object"]["usage"]["completion_tokens"]*output_costs_per_token[llm]
+                        cost+=utils.calculate_token_cost(llm, new_instance[-1]["response_object"]["usage"]["prompt_tokens"], new_instance[-1]["response_object"]["usage"]["completion_tokens"])
                         completed_tasks += 1
                     progress.update(task, advance=1, description=f"Processing... ${cost:.2f} ({len(futures)+1} tasks in queue. {completed_tasks} tasks completed)")
                     if len(new_instance) >= num_iterations:
