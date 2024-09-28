@@ -56,6 +56,7 @@ def read_jsonl(domain_name, data_type, llm="", verbose=False):
     return previous
 
 def update_format_to_jsonl(domain_name, overwrite_previous, data_type, llm, backprompt_type, temp, trial_num=0, verbose=False):
+    raise ValueError("This function is deprecated.")
     prompting_details = f"backprompting-{backprompt_type}{f'-temp{temp}' if temp else ''}"
     subloc=f"{llm}_chat/{prompting_details}/{trial_num if trial_num else ''}{data_type}.json"
     original_location = f"data/{data_type}/{domain_name}/{subloc}"

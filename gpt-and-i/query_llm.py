@@ -7,7 +7,7 @@ from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskPr
 import time
 import json
 
-MAX_GPT_RESPONSE_LENGTH = 1500
+MAX_GPT_RESPONSE_LENGTH = 10000
 MAX_GPT_RESPONSE_LENGTH_SAFE = 300 #something to restrict output to if everything gets too long
 MAX_BACKPROMPT_LENGTH = 15
 STOP_PHRASE = "stop10002" # "Verifier confirmed success" # what the verifier has to say
@@ -90,8 +90,9 @@ def get_responses(llm, domain_name, start=0, end=0, overwrite_previous=False, ve
     if end > start: prompts = {str(x) : prompts[str(x)] for x in range(start, end+1)}
     print(f">>Checking {len(prompts)} instances for work to be done.")
 
+    # DEPRECATED:
     # convert to new format if it isn't already, then mark the file as old
-    utils.update_format_to_jsonl(domain_name, overwrite_previous, "responses", llm, backprompt_type, temp, trial_id, verbose)
+    # utils.update_format_to_jsonl(domain_name, overwrite_previous, "responses", llm, backprompt_type, temp, trial_id, verbose)
     previous_output = utils.read_jsonl(domain_name, "responses", llm, verbose)
 
     # Create input of only instances that haven't been completed yet

@@ -11,6 +11,10 @@ INITIAL_NODES = 3
 NEIGHBOR_P = .4
 SOURCE_P = .2
 
+TEXT_CRITS = ["none_text", "freeform_text", "cot_freeform_text"]
+COT_JSON_CRITS = ["full_cot_json", "first_cot_json", "freeform_cot_json", "none_cot_json"]
+JSON_CRITS = ["full", "first", "freeform", "none"]+COT_JSON_CRITS
+
 import grinpy
 import os
 import argparse
@@ -33,13 +37,17 @@ def generate_cot_prompt(instance_text, coloring_text):
     return prompt
 
 def parse_messy_json(response_raw):
-    try: response_json = json.loads(response_raw.split("[Answer]")[1].lower())
+    try: response_json = json.loads(response_raw.split("[Answer]")[-1].lower())
     except: 
-        try: response_json = json.loads(response_raw)
+        try: response_json = json.loads(response_raw.lower())
         except:
-            try: response_json = json.loads(response_raw.split("```json")[1].split("```")[0])
+            try: response_json = json.loads(response_raw.split("```json")[1].split("```")[0].lower())
             except:
-                raise ValueError(response_raw)
+                try: response_json = json.loads(response_raw.split("\n")[-1].lower())
+                except:
+                    print("[!] Failed to parse json. Returning blank critique.")
+                    print(response_raw)
+                    return {"feedback": "", "wrong_edges":[], "missing_vertices":[], "optimal":False, "correct":False}
     return response_json
 
 def parse_dimacs(instance_text):
@@ -84,26 +92,60 @@ def check_coloring(proposed_coloring, instance_text):
             reasons.append(missing_vertex(edge[0]))
         if edge[1] not in coloring:
             reasons.append(missing_vertex(edge[1]))
-        if coloring[edge[0]] == coloring[edge[1]]:
+        if edge[0] in coloring and edge[1] in coloring and coloring[edge[0]] == coloring[edge[1]]:
             reasons.append(wrong_edge(edge[0], edge[1], coloring[edge[0]]))
     # check if coloring is optimal
     optimal_num = int(optimal_coloring_number(instance_text))
-    if optimal_num == len(set(coloring.values())):
+    if optimal_num < len(set(coloring.values())):
         reasons.append(not_optimal(optimal_num))
-    if reasons: return False, reasons
+    if reasons:
+        # print("\n================================\n")
+        # print(instance_text)
+        # print(proposed_coloring)
+        # print(reasons)
+        return False, reasons
     else: return True, []
     
-def evil_check_coloring(model_response, instance_text):
-    raise NotImplementedError #Update this
+def evil_check_coloring(proposed_coloring, instance_text):
+    ground_truth = check_coloring(proposed_coloring, instance_text)
+    if not ground_truth[0]: return True, []
+    coloring = {}
+    for line in proposed_coloring.split("\n"):
+        assignment = line.strip().split(": ")
+        if len(assignment) < 2: continue #throw out lines that aren't part of the coloring
+        vertex_number = assignment[0]
+        coloring[vertex_number] = assignment[1]
+    # get all the edges that ARE correct
+    edges = parse_dimacs(instance_text)
+    reasons = []
+    for edge in edges:
+        if coloring[edge[0]] != coloring[edge[1]]:
+            reasons.append(wrong_edge(edge[0], edge[1], coloring[edge[0]]))
+    if reasons:
+        return False, reasons
+    else: return True, []
 
-def extract_critique_from_llm_response(response, instance_text):
+def extract_critique_from_llm_response(response, instance_text, critique_type):
+    if critique_type == "none_text": return []
+    elif critique_type in ["freeform_text", "cot_freeform_text"]:
+        try:
+            return [response.split("[Answer]")[1]]
+        except: return [response]
     parsed_json = parse_messy_json(response)
-    missing = parsed_json["missing_vertices"]
-    wrong_edges = parsed_json["wrong_edges"]
-    optimal = parsed_json["optimal"]
-    optimal_num = int(optimal_coloring_number(instance_text))
-    reasons = [missing_vertex(m) for m in missing] + [wrong_edge(*triple) for triple in wrong_edges]
-    if not optimal: reasons.append(not_optimal(optimal_num))
+    if critique_type in ["full", "first", "first_cot_json", "full_cot_json"]:
+        missing = parsed_json["missing_vertices"]
+        wrong_edges = parsed_json["wrong_edges"]
+        optimal = parsed_json["optimal"]
+        optimal_num = int(optimal_coloring_number(instance_text))
+        reasons = [missing_vertex(m) for m in missing] + [wrong_edge(*triple) for triple in wrong_edges]
+        if not optimal: reasons.append(not_optimal(optimal_num))
+    elif critique_type in ["freeform", "freeform_cot_json"]:
+        reasons = [parsed_json["feedback"]]
+    elif critique_type in ["none", "none_cot_json"]:
+        reasons = []
+    else:
+        print(f"Critique type {critique_type} not implemented.")
+        raise NotImplementedError(f"Critique type {critique_type} not implemented.")
     return reasons
 
 def generate_random_graph(num_nodes, edge_p):
@@ -144,20 +186,20 @@ def evaluate(instance):
     evaluation = []
     backprompt_type = instance[-1]["backprompt_type"]
     instance_text = get_instance_text(instance[-1]["problem_id"])
-    critiques = []
-    if "llm" in backprompt_type:
+    # critiques = []
+    if "llm" in backprompt_type['verifier'] or "llm" in backprompt_type['critiquer']:
         generations = instance[::2]
         generations[-1]['stopped'] = instance[-1]['stopped']
-        if backprompt_type != "sound+llm": critiques = instance[1::2]
+        # if backprompt_type != "sound+llm": critiques = instance[1::2]
     else:
         generations = instance
     for response in generations:
         correct = check_coloring(response["response"], instance_text)[0]
         verification_claim = response['stopped']
-        if backprompt_type == "top":
-            verification_claim = correct
+        # if backprompt_type == "top":
+        #     verification_claim = correct
         evaluation.append({"correct": correct, "verification_claim": verification_claim})
-        if backprompt_type == "top" and verification_claim: break
+        # if backprompt_type == "top" and verification_claim: break
     return evaluation
 
 def get_instance_text(problem_id):
@@ -167,13 +209,60 @@ def get_instance_text(problem_id):
 def generate_verification_prompt(instance):
     instance_text = get_instance_text(instance[-1]["problem_id"])
     response = instance[-1]["response"]
+    critique_type = instance[-1]["backprompt_type"]["critique_type"]
     # Return checking prompt for odd numbered responses
-    backprompt_query = '[Instructions]\nWhen outputting your final answer, first print the [Answer] tag, then put your final answer after the [Answer] tag. Respond only with a json dictionary in the following format:\n'+\
-        '{"wrong_edges": [a list of triples: [v1, v2, c] where v1 and v2 are connected and both colored c],'+\
-        '"missing_vertices": [a list of vertices that were not colored],'+\
-        '"optimal": boolean representing if the number of colors used is less than the given optimal number,'+\
-        '"correct": boolean representing overall correctness}'+\
-        '\nEnsure that the dictionary contains all four keys, even if some are empty. Ensure that the python json library can parse the dictionary.\n'
+    if critique_type in ["full","first"]:
+        backprompt_query = '[Instructions]\nWhen outputting your final answer, first print the [Answer] tag, then put your final answer after the [Answer] tag. Respond only with a json dictionary in the following format:\n'+\
+            '{"wrong_edges": [a list of triples: [v1, v2, c] where v1 and v2 are connected and both colored c],'+\
+            '"missing_vertices": [a list of vertices that were not colored],'+\
+            '"optimal": boolean representing if the number of colors used is less than the given optimal number,'+\
+            '"correct": boolean representing overall correctness}'+\
+            '\nEnsure that the dictionary contains all four keys, even if some are empty. Ensure that the python json library can parse the dictionary.\n'
+    elif critique_type == "freeform":
+        backprompt_query = '[Instructions]\nWhen outputting your final answer, first print the [Answer] tag, then put your final answer after the [Answer] tag. Respond only with a json dictionary in the following format:\n'+\
+            '{"feedback": "a string which contains feedback on why the coloring is wrong"'+\
+            '"correct": boolean representing overall correctness}'+\
+            '\nEnsure that the dictionary contains both keys. Ensure that the python json library can parse the dictionary.\n'
+    elif critique_type == "none":
+        backprompt_query = '[Instructions]\nWhen outputting your final answer, first print the [Answer] tag, then put your final answer after the [Answer] tag. Respond only with a json dictionary in the following format:\n'+\
+            '{"correct": boolean representing overall correctness}'+\
+            '\nEnsure that the dictionary contains the key. Ensure that the python json library can parse the dictionary.\n'
+    elif critique_type == "none_text":
+        backprompt_query = '[Instructions]\nWhen outputting your final answer, first print the [Answer] tag, then put your final answer after the [Answer] tag.\n'+\
+            'If the coloring is correct, output the phrase "Verifier confirmed success." Do not include anything else in your response.\n'+\
+            'If the coloring is incorrect, output the phrase "This coloring is incorrect." Do not include anything else in your response.\n'
+    elif critique_type == "freeform_text":
+        backprompt_query = '[Instructions]\nWhen outputting your final answer, first print the [Answer] tag, then put your final answer after the [Answer] tag.\n'+\
+            'If the coloring is correct, output the phrase "Verifier confirmed success." Do not include anything else in your response.\n'+\
+            'If the coloring is incorrect, provide feedback about why it is incorrect.\n'
+    elif critique_type == "cot_freeform_text":
+        backprompt_query = '[Instructions]\nWhen outputting your final answer, first print the [Answer] tag, then put your final answer and feedback after the [Answer] tag.\n'+\
+            'If the coloring is correct, output the phrase "Verifier confirmed success." Do not include anything else in your response.\n'+\
+            'If the coloring is incorrect, provide feedback about why it is incorrect.\n'+\
+            'Before you output the final feedback and answer, please think step by step and output your thoughts. Remember to print the [Answer] tag after your thoughts and before your final answer.\n\n[Thoughts]\n'
+    elif critique_type in ["full_cot_json", "first_cot_json"]:
+        backprompt_query = '[Instructions]\nWhen outputting your final answer, first print the [Answer] tag, then put your final answer after the [Answer] tag.\n'+\
+            'When you write your final answer, write only a json dictionary in the following format:\n'+\
+            '{"wrong_edges": [a list of triples: [v1, v2, c] where v1 and v2 are connected and both colored c],'+\
+            '"missing_vertices": [a list of vertices that were not colored],'+\
+            '"optimal": boolean representing if the number of colors used is less than the given optimal number,'+\
+            '"correct": boolean representing overall correctness}'+\
+            '\nEnsure that the dictionary contains all four keys, even if some are empty. Ensure that the python json library can parse the dictionary.\n'+\
+            'Before you output the final answer as a json, please think step by step and output your thoughts. Remember to print the [Answer] tag after your thoughts and before your final answer.\n\n[Thoughts]\n'
+    elif critique_type == "freeform_cot_json":
+        backprompt_query = '[Instructions]\nWhen outputting your final answer, first print the [Answer] tag, then put your final answer after the [Answer] tag.\n'+\
+            'When you write your final answer, write only a json dictionary in the following format:\n'+\
+            '{"feedback": "a string which contains feedback on why the coloring is wrong"'+\
+            '"correct": boolean representing overall correctness}'+\
+            '\nEnsure that the dictionary contains both keys. Ensure that the python json library can parse the dictionary.\n'+\
+            'Before you output the final answer as a json, please think step by step and output your thoughts. Remember to print the [Answer] tag after your thoughts and before your final answer.\n\n[Thoughts]\n'
+    elif critique_type == "none_cot_json":
+        backprompt_query = '[Instructions]\nWhen outputting your final answer, first print the [Answer] tag, then put your final answer after the [Answer] tag.\n'+\
+            'When you write your final answer, write only a json dictionary in the following format:\n'+\
+            '{"correct": boolean representing overall correctness}'+\
+            '\nEnsure that the dictionary contains the keys. Ensure that the python json library can parse the dictionary.\n'+\
+            'Before you output the final answer as a json, please think step by step and output your thoughts. Remember to print the [Answer] tag after your thoughts and before your final answer.\n\n[Thoughts]\n'
+    else: raise NotImplementedError(f'Critique type {critique_type} not implemented for LLM verification.')
     backprompt_query+= f"[QUERY]\nThe following graph, described as a set of edges, has an optimal coloring number of {optimal_coloring_number(instance_text)}:\n"
     _, graph_text = parse_graph_to_prompt(instance_text)
     backprompt_query+= graph_text
@@ -183,6 +272,8 @@ def generate_verification_prompt(instance):
 
 def sound_verify(instance):
     return check_coloring(instance[-1]["response"][-1], get_instance_text(instance[-1]["problem_id"]))[0]
+def evil_verify(instance):
+    return evil_check_coloring(instance[-1]["response"][-1], get_instance_text(instance[-1]["problem_id"]))[0]
 
 def wrap_in_messages(s):
     return [{'role':'user', 'content':s}]
@@ -201,22 +292,44 @@ def backprompt(instance):
         jump = 2
     # check verification and stop if it says to
     if verifier == "sound" and sound_verify(instance): return wrap_in_messages("stop10002")
-    elif verifier == "llm" and parse_messy_json(instance[-1]["response"])["correct"]: return wrap_in_messages("stop10002")
+    elif verifier == "evil" and evil_verify(instance): return wrap_in_messages("stop10002")
+    elif verifier == "llm":
+        if critique_type in TEXT_CRITS and STOP_PHRASE in instance[-1]["response"]: return wrap_in_messages("stop10002")
+        elif critique_type in JSON_CRITS and parse_messy_json(instance[-1]["response"])["correct"]: return wrap_in_messages("stop10002")
     # check if 0 history length
     if history_len == 0: return wrap_in_messages(instance[0]["prompt"])
     # then generate critique
     if critiquer == "llm":
-        reasons = extract_critique_from_llm_response(instance[-1]["response"], get_instance_text(instance[-1]["problem_id"]))
+        try:
+            reasons = extract_critique_from_llm_response(instance[-1]["response"], get_instance_text(instance[-1]["problem_id"]), critique_type)
+        except:
+            print(f"[!] Failed to extract critique from {instance[-1]['response']}")
+            reasons = []
     elif critiquer == "sound":
         _, reasons = check_coloring(instance[-1]["response"], get_instance_text(instance[-1]["problem_id"]))
+    elif critiquer == "evil":
+        _, reasons = evil_check_coloring(instance[-1]["response"], get_instance_text(instance[-1]["problem_id"]))
     else: raise NotImplementedError()
     # and put it together, with amount of detail specified
-    if critique_type == "full":
-        critique = "\n".join(reasons)
-    elif critique_type == "first":
-        critique = reasons[0]
-    else: raise NotImplementedError()
-    new_portion = [{'role':'assistant', 'content':instance[-jump]["response"]}] + wrap_in_messages(f"This is incorrect. Feedback:\n{critique}\n\nUsing this feedback, please try again. {DEFAULT_PROMPT_END}")
+    # the cot versions change the prompt given to the verifying llm, nothing else
+    if reasons:
+        if critique_type in ["full", "full_cot_json"]:
+            critique = "\n".join(reasons)
+        elif critique_type in ["first", "first_cot_json"]:
+            critique = reasons[0]
+        # the following change the prompt given to the critiquing LLM
+        elif critique_type in ["freeform", "freeform_cot_json"]:
+            critique = reasons[0]
+        elif critique_type in ["freeform_text"]:
+            critique = reasons[0]
+        elif critique_type in ["none", "none_cot_json"]:
+            critique = ""
+        elif critique_type == "none_text":
+            critique = ""
+        else: raise NotImplementedError()
+        feedback = f"Feedback:\n{critique}\n\nUsing this feedback, please try again."
+    else: feedback = "Please try again."
+    new_portion = [{'role':'assistant', 'content':instance[-jump]["response"]}] + wrap_in_messages(f"This is incorrect. {feedback}\n{DEFAULT_PROMPT_END}")
     # then concatenate history properly
     initial_prompt = [instance[0]["prompt"][0]]
     if history_type == "full":

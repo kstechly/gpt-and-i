@@ -49,8 +49,10 @@ def print_stats(evaluated_data):
     fp_total = sum([e["verification_claim"] and not e["correct"] for e in flat_data])
     print(f'>>Number of FP verifications: {fp_total} (Avg per incorrect instance: {fp_total/(len(flat_data)-correct_total)})')
     initial_correct = sum([instance[0]["correct"] for instance in evaluated_data.values()])
+    final_correct = sum([instance[-1]["correct"] for instance in evaluated_data.values()])
     print(f'>>Initial accuracy: {100*initial_correct/instance_total:>5.2f}%')
     print(f'>>Final accuracy: {100*tp_total/instance_total:>5.2f}%')
+    print(f'>>Unverified final accuracy: {100*final_correct/(instance_total):>5.2f}%')
 
     # TODO
     # print(f'[-] Critique evaluation not yet implemented.')
@@ -67,8 +69,9 @@ def print_stats(evaluated_data):
     ## crit
     return 100*initial_correct/instance_total, 100*tp_total/instance_total
 
-def evaluate_plan(llm, domain_name, start=0, end=0, overwrite_previous=False, verbose=False, backprompt_type="", num_iterations=15, temp=1, trial_id=0):
+def evaluate_responses(llm, domain_name, start=0, end=0, verbose=False, num_iterations=15, temp=1, trial_id=0, generator="llm", verifier="sound", critiquer="", critique_type="full", history_len=15, history_type="full"):
     # TODO make this not re-evaluate every time (for speed?)
+    backprompt_type = {"generator":generator, "verifier":verifier, "critiquer":critiquer, "critique_type":critique_type, "history_len":history_len, "history_type":history_type}
     prompts = utils.read_json(domain_name, overwrite_previous=False, data_type="prompts")
     if end > start: prompts = {str(x) : prompts[str(x)] for x in range(start, end+1)}
     # utils.update_format_to_jsonl(domain_name, overwrite_previous, "responses", llm, backprompt_type, temp, trial_id, verbose)
@@ -76,29 +79,29 @@ def evaluate_plan(llm, domain_name, start=0, end=0, overwrite_previous=False, ve
     b_types = []
     for line in output:
         if line["backprompt_type"] not in b_types: b_types.append(line["backprompt_type"])
-    print(f">>Backprompt_types with data available: {b_types}")
+    print(f">>{len(b_types)} backprompt_types with data available: {b_types}")
     
     # the following calculates the cost across ALL experiments
     # total_cost = sum([utils.calculate_token_cost(llm, x["response_object"]["usage"]["prompt_tokens"], x["response_object"]["usage"]["completion_tokens"]) for x in output])
 
     print(f">>Loaded {len(output)} responses.")
     # TODO this is a hack, and really slow, just use pandas
-    if backprompt_type == "all":
-        all_b_types = {}
-        for b_type in b_types:
-            print(f">Evaluating {len(prompts)} instances with backprompt type {b_type}.")
-            input = prepare_input(prompts, output, llm, b_type, temp, trial_id, num_iterations)
-            evaluated_data = evaluate_per_instance(domain_name, input, verbose)
-            print(f">Stats for backprompt type {b_type}:")
-            all_b_types[b_type] = print_stats(evaluated_data)
-        print(f"> b_type chart:")
-        for b_type in all_b_types.keys():
-            print(f"{all_b_types[b_type][0]:>5.2f}% -> {all_b_types[b_type][1]:>5.2f}% ({b_type})")
-    else: 
-        input = prepare_input(prompts, output, llm, backprompt_type, temp, trial_id, num_iterations)
-        print(f">>Evaluating {len(prompts)} instances.")
-        evaluated_data = evaluate_per_instance(domain_name, input, verbose)
-        print_stats(evaluated_data)
+    # if backprompt_type == "all":
+    #     all_b_types = {}
+    #     for b_type in b_types:
+    #         print(f">Evaluating {len(prompts)} instances with backprompt type {b_type}.")
+    #         input = prepare_input(prompts, output, llm, b_type, temp, trial_id, num_iterations)
+    #         evaluated_data = evaluate_per_instance(domain_name, input, verbose)
+    #         print(f">Stats for backprompt type {b_type}:")
+    #         all_b_types[b_type] = print_stats(evaluated_data)
+    #     print(f"> b_type chart:")
+    #     for b_type in all_b_types.keys():
+    #         print(f"{all_b_types[b_type][0]:>5.2f}% -> {all_b_types[b_type][1]:>5.2f}% ({b_type})")
+    # else: 
+    input = prepare_input(prompts, output, llm, backprompt_type, temp, trial_id, num_iterations)
+    print(f">>Evaluating {len(prompts)} instances.")
+    evaluated_data = evaluate_per_instance(domain_name, input, verbose)
+    print_stats(evaluated_data)
 
 if __name__=="__main__":
-    Fire(evaluate_plan)
+    Fire(evaluate_responses)
