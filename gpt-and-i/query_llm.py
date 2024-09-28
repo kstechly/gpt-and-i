@@ -14,16 +14,14 @@ STOP_PHRASE = "stop10002" # "Verifier confirmed success" # what the verifier has
 STOP_STATEMENT = "[ANSWER END]" # what we look for to end LLM response generation
 MAX_WORKERS = 1000
 
-def check_spec(line, key, llm, backprompt_type, temp, trial_num):
-    return line["llm"] == llm and line["backprompt_type"] == backprompt_type and line["temp"] == temp and int(line["trial_num"]) == int(trial_num) and int(line["problem_id"]) == int(key)
-
-def prepare_input(prompts, previous_output, llm, multiprompting, temp, trial_id, num_iterations):
+def prepare_input(prompts, previous_output, llm, backprompt_type, temp, trial_id, num_iterations):
+    #TODO refactor
     input = []
     for key in prompts.keys():
         furthest = -1
         full_key_output = []
         for line in previous_output:
-            if check_spec(line, key, llm, multiprompting, temp, trial_id):
+            if utils.check_spec(line, key, llm, backprompt_type, temp, trial_id):
                 full_key_output.append(line)
                 if line["prompt_num"] > furthest:
                     furthest = line["prompt_num"]
@@ -31,7 +29,7 @@ def prepare_input(prompts, previous_output, llm, multiprompting, temp, trial_id,
                     if furthest +1 >= num_iterations: break
                 if line["stopped"]: break
         if furthest == -1:
-            input.append([{"problem_id":key, "trial_num":trial_id, "llm":llm, "backprompt_type":multiprompting, "temp":temp, "prompt_num":0, "prompt":prompts[key], "response":"", "converted_data":False, "stopped":False}])
+            input.append([{"problem_id":key, "trial_num":trial_id, "llm":llm, "backprompt_type":backprompt_type, "temp":temp, "prompt_num":0, "prompt":[{"role":"user", "content": prompts[key]}], "response":"", "converted_data":False, "stopped":False}])
         elif not furthest_stopped and furthest+1 < num_iterations:
             full_key_output = sorted(full_key_output, key=lambda x: x["prompt_num"])
             input.append(full_key_output)
@@ -68,15 +66,13 @@ def process_instance(instance, domain_name, verbose=False):
     return instance
 
 def check_backprompt(backprompt):
-    return STOP_PHRASE.lower() in backprompt.lower()
+    return STOP_PHRASE.lower() in backprompt[-1]['content'].lower()
 
-def send_query(query, llm, max_tokens=MAX_GPT_RESPONSE_LENGTH, temp=1):
-    messages=[]
-    messages.append({"role": "user", "content": query})
+def send_query(prompt, llm, max_tokens=MAX_GPT_RESPONSE_LENGTH, temp=1):
     try:
         client = OpenAI()
         start = time.time()
-        response = client.chat.completions.create(model=llm, messages=messages, temperature=temp, stop="[ANSWER END]", max_tokens=max_tokens)
+        response = client.chat.completions.create(model=llm, messages=prompt, temperature=temp, stop="[ANSWER END]", max_tokens=max_tokens)
         end = time.time()
     except Exception as e:
         print("[-]: Failed OpenAI query execution: {}".format(e))
@@ -84,7 +80,9 @@ def send_query(query, llm, max_tokens=MAX_GPT_RESPONSE_LENGTH, temp=1):
     response_dict = {**json.loads(response.model_dump_json()), "time": end-start}
     return response, response_dict
 
-def get_responses(llm, domain_name, start=0, end=0, overwrite_previous=False, verbose=False, multiprompting="", num_iterations=15, temp=1, trial_id=0, max_cost=100):
+def get_responses(llm, domain_name, start=0, end=0, overwrite_previous=False, verbose=False, generator = "llm", verifier = "sound", critiquer = "", critique_type = "full", history_len = 15, history_type = "full", num_iterations=15, temp=1, trial_id=0, max_cost=100):
+    if history_len == 0: critiquer = ""
+    backprompt_type = {"generator":generator, "verifier":verifier, "critiquer":critiquer, "critique_type":critique_type, "history_len":history_len, "history_type":history_type}
     if not utils.known_llm(llm): return
     prompts = utils.read_json(domain_name, overwrite_previous=False, data_type="prompts")
 
@@ -93,11 +91,11 @@ def get_responses(llm, domain_name, start=0, end=0, overwrite_previous=False, ve
     print(f">>Checking {len(prompts)} instances for work to be done.")
 
     # convert to new format if it isn't already, then mark the file as old
-    utils.update_format_to_jsonl(domain_name, overwrite_previous, "responses", llm, multiprompting, temp, trial_id, verbose)
+    utils.update_format_to_jsonl(domain_name, overwrite_previous, "responses", llm, backprompt_type, temp, trial_id, verbose)
     previous_output = utils.read_jsonl(domain_name, "responses", llm, verbose)
 
     # Create input of only instances that haven't been completed yet
-    input = prepare_input(prompts, previous_output, llm, multiprompting, temp, trial_id, num_iterations)
+    input = prepare_input(prompts, previous_output, llm, backprompt_type, temp, trial_id, num_iterations)
     print(f">>Instances to be processed: {len(input)}")
 
     total_tasks = len(input)*num_iterations

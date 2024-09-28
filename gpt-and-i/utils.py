@@ -6,6 +6,7 @@ from itertools import chain
 from rich.progress import TextColumn, MofNCompleteColumn, Progress, BarColumn, TimeElapsedColumn, TimeRemainingColumn 
 from rich.table import Column 
 import pandas as pd
+import subprocess
 
 ### json utils
 def write_json(domain_name,dict_to_write,data_type):
@@ -161,3 +162,7 @@ def known_llm(llm):
     return known
 def calculate_token_cost(llm, input_tokens, output_tokens):
     return (input_tokens * costs_per_million[llm][0] + output_tokens * costs_per_million[llm][1]) / 10**6
+
+### data restructuring utils
+def check_spec(line, key, llm, backprompt_type, temp, trial_num):
+    return line["llm"] == llm and line["backprompt_type"] == backprompt_type and line["temp"] == temp and int(line["trial_num"]) == int(trial_num) and int(line["problem_id"]) == int(key)

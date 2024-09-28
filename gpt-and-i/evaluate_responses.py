@@ -1,153 +1,104 @@
-import os
-import argparse
-import json
-from tqdm import tqdm
 import domain_utils
-from domain_utils import *
+import utils
+from fire import Fire
+from rich import progress
 
-def evaluate_plan(engine, domain_name, specified_instances=[], ignore_existing=False, verbose=False, multiprompting="", problem_type="", temp=0, backprompt_num=0, trial_id=0):
-    domain = domain_utils.domains[domain_name]
+def prepare_input(prompts, previous_output, llm, backprompt_type, temp, trial_id, num_iterations):
+    #TODO refactor
+    print(f">>Preparing LLM output...")
+    #TODO save this work if already done and fast check it if it's been done before
+    #     Can I read the jsonl file backwards and find where I last left off?
+    input = []
+    for key in prompts.keys():
+        full_key_output = []
+        furthest = -1
+        for line in previous_output:
+            if utils.check_spec(line, key, llm, backprompt_type, temp, trial_id):
+                if line["prompt_num"] > num_iterations: continue
+                full_key_output.append(line)
+                if line["prompt_num"] > furthest:
+                    furthest = line["prompt_num"]
+        if furthest > -1:
+            full_key_output = sorted(full_key_output, key=lambda x: x["prompt_num"])
+            input.append(full_key_output)
+    print(f">>Output reformatted for evaluation.")
+    return input
+
+def evaluate_per_instance(domain_name, input, verbose=False):
+    dmn = domain_utils.get_domain(domain_name)
+    evals = {}
+    # {problem_id: 
+    #   [{'correct': BOOL, 'verification_claim': BOOL}]
+    # }
+    for instance in input:
+        if verbose: print(f">>Evaluating instance {instance[0]['problem_id']}.")
+        evals[instance[0]["problem_id"]] = dmn.evaluate(instance)
+    return evals
+
+def print_stats(evaluated_data):
+    flat_data = [e for instance in evaluated_data.values() for e in instance]
+    instance_total = len(evaluated_data)
+    print(f">>Number of instances: {instance_total}")
+    print(f">>Number of generation prompts sent: {len(flat_data)} (Avg per instance: {len(flat_data)/instance_total})")
+    correct_total = sum([e["correct"] for e in flat_data])
+    print(f'>>Number of correct generations: {correct_total} (Avg per instance: {correct_total/instance_total})')
+    verification_claim_total = sum([e["verification_claim"] for e in flat_data])
+    print(f'>>Number of verifications stating TRUE: {verification_claim_total} (Avg per response: {verification_claim_total/len(flat_data)})')
+    tp_total = sum([e["verification_claim"] and e["correct"] for e in flat_data])
+    print(f'>>Number of TP verifications: {tp_total} (Avg per correct instance: {tp_total/correct_total})')
+    fp_total = sum([e["verification_claim"] and not e["correct"] for e in flat_data])
+    print(f'>>Number of FP verifications: {fp_total} (Avg per incorrect instance: {fp_total/(len(flat_data)-correct_total)})')
+    initial_correct = sum([instance[0]["correct"] for instance in evaluated_data.values()])
+    print(f'>>Initial accuracy: {100*initial_correct/instance_total:>5.2f}%')
+    print(f'>>Final accuracy: {100*tp_total/instance_total:>5.2f}%')
+
+    # TODO
+    # print(f'[-] Critique evaluation not yet implemented.')
+    # print(f'[-] Per instance and per prompt charting not yet implemented.')
+    # get the per instance averages
+    # correct, also prompts done per
+    ## gen
+    ## ver
+    ## crit
+
+    # get the per prompt num averages (with a chart over the number of prompts)
+    ## gen
+    ## ver
+    ## crit
+    return 100*initial_correct/instance_total, 100*tp_total/instance_total
+
+def evaluate_plan(llm, domain_name, start=0, end=0, overwrite_previous=False, verbose=False, backprompt_type="", num_iterations=15, temp=1, trial_id=0):
+    # TODO make this not re-evaluate every time (for speed?)
+    prompts = utils.read_json(domain_name, overwrite_previous=False, data_type="prompts")
+    if end > start: prompts = {str(x) : prompts[str(x)] for x in range(start, end+1)}
+    # utils.update_format_to_jsonl(domain_name, overwrite_previous, "responses", llm, backprompt_type, temp, trial_id, verbose)
+    output = utils.read_jsonl(domain_name, "responses", llm, verbose)
+    b_types = []
+    for line in output:
+        if line["backprompt_type"] not in b_types: b_types.append(line["backprompt_type"])
+    print(f">>Backprompt_types with data available: {b_types}")
     
-    # Check for/set up relevant directories
-    instances_dir = f"data/{domain_name}/"
-    outputs_dir = f"responses/{domain_name}/{engine}/"
-    evals_dir = f"evaluations/{domain_name}/{engine}/"
-    if multiprompting:
-        outputs_dir+=f"backprompting{f'-{multiprompting}' if multiprompting else ''}{f'-temp{temp}' if temp else ''}/"
-        evals_dir+=f"backprompting{f'-{multiprompting}' if multiprompting else ''}{f'-temp{temp}' if temp else ''}/"
-    if problem_type:
-        outputs_dir+=f"{problem_type}/"
-        evals_dir+=f"{problem_type}/"
-    if trial_id:
-        outputs_dir+=f"{trial_id}"
-        evals_dir+=f"{trial_id}"
-    outputs_json = outputs_dir+"responses.json"
-    evals_json = evals_dir+"evaluations.json"
+    # the following calculates the cost across ALL experiments
+    # total_cost = sum([utils.calculate_token_cost(llm, x["response_object"]["usage"]["prompt_tokens"], x["response_object"]["usage"]["completion_tokens"]) for x in output])
 
-    # Load response data
-    if os.path.exists(outputs_json):
-            with open(outputs_json, 'r') as file:
-                output = json.load(file)
-    else:
-        print(f"No response data found in {outputs_dir}")
-        return None
-    
-    # Constrain work to only specified instances if flagged to do so
-    if len(specified_instances) > 0:
-        output = {str(x) : output[str(x)] for x in specified_instances}
-    
-    # Load previously done work
-    evaluations = {}
-    os.makedirs(evals_dir, exist_ok=True)
-    if os.path.exists(evals_json) and not ignore_existing:
-        print(evals_json)
-        with open(evals_json, 'r') as file:
-            evaluations = json.load(file)
-
-    sneaker = []
-
-    # Evaluate each instance individually
-    for instance in tqdm(output):
-        if instance not in evaluations:
-            if verbose: print(f"==Evaluating instance {instance}==")
-
-            # Load actual instance data
-            instance_location = f"{instances_dir}/instance-{instance}{domain.file_ending()}"
-            try:
-                with open(instance_location,"r") as fp:
-                    instance_text = fp.read()
-            except FileNotFoundError:
-                print(f"{instance_location} not found. Skipping.")
-                continue
-
-            # Evaluate instance
-            print(instance)
-            print(output[instance])
-            evaluations[instance] = domain.evaluate(instance_text, output[instance], problem_type, multiprompting)
-            if verbose: print(f"==Evaluation for instance {instance}: ==\n{evaluations[instance]}")
-
-            # Dump to file
-            with open(evals_json, 'w') as file:
-                json.dump(evaluations, file, indent=4)
-        else: 
-            if verbose: print(f"==Instance {instance} already evaluated. Skipping==")
-        try: sneak_peek = {x: sneak_peek[x]+evaluations[instance][-1][x] for x in evaluations[instance][-1]}
-        except: sneak_peek = evaluations[instance][-1]
-        try: sneak_peek_averages = {x: sneak_peek_averages[x]+evaluations[instance][-1][x]/evaluations[instance][-1]["num prompts"] for x in evaluations[instance][-1]}
-        except: sneak_peek_averages = {x: evaluations[instance][-1][x]/evaluations[instance][-1]["num prompts"] for x in evaluations[instance][-1]}
-        # what i want is to take the number correct and the number evaluated as something, so I need access to the latter
-        for p_num in range(0,len(sneaker)):
-                q_num = p_num
-                if q_num>=len(evaluations[instance]):
-                    q_num = -1
-                sneaker[p_num] = {x: sneaker[p_num][x]+evaluations[instance][q_num][x] for x in sneaker[p_num]}
-        if len(sneaker) < len(evaluations[instance]): sneaker = sneaker + evaluations[instance][len(sneaker):]
-        for p_num in range(len(sneaker),101):
-            if len(sneaker) <= p_num: sneaker.append(evaluations[instance][-1])
-            else: sneaker[p_num] = {x: sneaker[p_num][x]+evaluations[instance][-1][x] for x in evaluations[instance][-1]}
-            
-    print(f"Sums: {sneak_peek}")
-    sneak_peek_average = {x: f"{sneak_peek_averages[x]/len(evaluations):.2f}" for x in sneak_peek_averages}
-    print(f"Avgs: {sneak_peek_average}")
-    if backprompt_num: print(f"Correct over {backprompt_num} prompts: {list(map(lambda x: x['correct'],sneaker))[backprompt_num-1]}")
-    else: print(f"Over prompt num: {list(map(lambda x: x['correct'],sneaker))}")
-    print(f"Prompts per instance: {[evaluations[x][-1]['num prompts'] for x in evaluations]}")
-    print(f"Correct per instance: {[int(evaluations[x][-1]['correct']) for x in evaluations]}")
-    print(f"Correct % per instance: {[int(100*float(evaluations[x][-1]['ever corrects']/float(evaluations[x][-1]['num prompts']))) for x in evaluations]}")
-    return sneak_peek, sneak_peek_average, sneaker
+    print(f">>Loaded {len(output)} responses.")
+    # TODO this is a hack, and really slow, just use pandas
+    if backprompt_type == "all":
+        all_b_types = {}
+        for b_type in b_types:
+            print(f">Evaluating {len(prompts)} instances with backprompt type {b_type}.")
+            input = prepare_input(prompts, output, llm, b_type, temp, trial_id, num_iterations)
+            evaluated_data = evaluate_per_instance(domain_name, input, verbose)
+            print(f">Stats for backprompt type {b_type}:")
+            all_b_types[b_type] = print_stats(evaluated_data)
+        print(f"> b_type chart:")
+        for b_type in all_b_types.keys():
+            print(f"{all_b_types[b_type][0]:>5.2f}% -> {all_b_types[b_type][1]:>5.2f}% ({b_type})")
+    else: 
+        input = prepare_input(prompts, output, llm, backprompt_type, temp, trial_id, num_iterations)
+        print(f">>Evaluating {len(prompts)} instances.")
+        evaluated_data = evaluate_per_instance(domain_name, input, verbose)
+        print_stats(evaluated_data)
 
 if __name__=="__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument('-e', '--engine', type=str, required=True, help='Engine to use \
-                        \n gpt-4_chat = GPT-4 \
-                        \n gpt-3.5-turbo_chat = GPT-3.5 Turbo \
-                        ')
-    parser.add_argument('-d', '--domain', type=str, required=True, help='Problem domain to evaluate within')
-    parser.add_argument('-v', '--verbose', action='store_true')
-    parser.add_argument('-s', '--specific_instances', nargs='+', type=int, default=[], help='List of instances to run')
-    parser.add_argument('-i', '--ignore_existing', action='store_true', help='Ignore existing output')
-    parser.add_argument('-b', '--backprompting', type=str, default='', help='If multiprompting, provide the type of multiprompt to pass to the domain. Common types: zero, passfail, full, llm, top')
-    parser.add_argument('-n', '--end_number', type=int, default=0, help='For running from instance m to n')
-    parser.add_argument('-m', '--start_number', type=int, default=1, help='For running from instance m to n. You must specify -n for this to work')
-    parser.add_argument('-t', '--temperature', type=float, default=0, help='Temperature from 0.0 to 2.0')
-    parser.add_argument('-p', '--problem', type=str, default='', help='If doing a domain subproblem, specify it here')
-    parser.add_argument('-B', '--backprompt_num', type=int, default=0, help='If multiprompting, provide the maximum number of prompts to try. Double this number to get expected behavior for LLM backprompting')
-    parser.add_argument('-T', '--trial', type=int, default=1, help='A unique number identifying which trial run this is continuing/starting')
-    args = parser.parse_args()
-    engine = args.engine
-    domain_name = args.domain
-    if domain_name not in domain_utils.domains:
-        raise ValueError(f"Domain name must be an element of {list(domain_utils.domains)}.")
-    specified_instances = args.specific_instances
-    specified_instances = args.specific_instances
-    verbose = args.verbose
-    backprompting = args.backprompting
-    backprompt_num = args.backprompt_num
-    ignore_existing = args.ignore_existing
-    end_number = args.end_number
-    start_number = args.start_number
-    problem_type = args.problem
-    temperature = args.temperature
-    trial_num = args.trial
-    if end_number>0 and specified_instances:
-        print("You can't use both -s and -n")
-    elif end_number>0:
-        specified_instances = list(range(start_number,end_number+1))
-        print(f"Running instances from {start_number} to {end_number}")
-    print(f"Engine: {engine}, Domain: {domain_name}, Verbose: {verbose}, Backprompting: {bool(backprompting)}, Trial ID: {trial_num}" )
-    total_corr = 0
-    init_corr = 0
-    ever_corr = 0
-    total_prompts = 0
-    for x in range(0,trial_num):
-        print(f"****TRIAL {x}*****")
-        sneak_peak,_, sneaker = evaluate_plan(engine, domain_name, specified_instances, ignore_existing, verbose, backprompting, problem_type=problem_type, temp=temperature, backprompt_num=backprompt_num, trial_id=x)
-        if backprompt_num: 
-            total_corr+= list(map(lambda x: x['correct'],sneaker))[backprompt_num-1]
-            init_corr+= list(map(lambda x: x['correct'],sneaker))[0]
-            ever_corr+=sneak_peak['ever corrects']
-            total_prompts+=sneak_peak['num prompts']
-    print(f"Avg over {trial_num} trials correct (after {backprompt_num} prompts): {total_corr/trial_num}")
-    print(f"Avg over {trial_num} trials correct (after {1} prompts): {init_corr/trial_num}")
-    if total_prompts:
-        print(f"Avg over {total_prompts/2} prompts: {2*ever_corr/total_prompts}")
+    Fire(evaluate_plan)

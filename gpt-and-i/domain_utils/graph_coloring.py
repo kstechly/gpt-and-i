@@ -11,10 +11,10 @@ INITIAL_NODES = 3
 NEIGHBOR_P = .4
 SOURCE_P = .2
 
-import grinpy #type: ignore
+import grinpy
 import os
 import argparse
-import matplotlib.pyplot as plt #type: ignore
+import matplotlib.pyplot as plt
 import json
 import time
 import re
@@ -26,24 +26,21 @@ def generate_cot_prompt(instance_text, coloring_text):
     prompt = ''
     prompt+= '\n[Instructions]\nWhen outputting your final answer, first print the [Answer] tag, then put your final answer after the [Answer] tag. Respond only in the following format:\nWrong Edges: a list of incorrect edges\nAll Vertices Colored: boolean representing if every vertex is colored\nOptimal Or Less: boolean representing if the number of colors is no more than the optimal\nCorrect: boolean'
     prompt+= f"\n\n[Graph]\nThe following graph, described as a set of edges, has an optimal coloring number of {optimal_coloring_number(instance_text)}:\n"
-    _, graph_text = generate_graph(instance_text)
+    _, graph_text = parse_graph_to_prompt(instance_text)
     prompt+= graph_text
     prompt+= f"\n[Coloring]\nA coloring is correct if no adjacent vertices are the same color and the total number of colors used is no more than the optimal coloring number. Please check if this coloring is correct: {coloring_text}"
     prompt+= f"\n\nLet's think step by step. Remember to output your final answer in the format described in the instructions.\n[Thoughts]"
     return prompt
 
 def parse_messy_json(response_raw):
-    try: response = response_raw.split("[Answer]")[1].lower()
+    try: response_json = json.loads(response_raw.split("[Answer]")[1].lower())
     except: 
-        try: response = response_raw.split("final answer is:")[1].lower()
-        except: raise ValueError(response_raw)
-    # print(response)
-    wrong_edges = response.split('wrong edges:')[1].split('\n')[0].strip().replace("(","[").replace(")","]")
-    all_verts = response.split('all vertices colored:')[1].split('\n')[0].strip()
-    optimal_or_less = response.split('optimal or less:')[1].split('\n')[0].strip()
-    correct = response.split('correct:')[1].split('\n')[0].strip()
-    messy_json_string = '{"wrong_edges": '+wrong_edges+', "all_verts":'+all_verts+', "opt":'+optimal_or_less+', "correct":'+correct+'}'
-    return json.loads(messy_json_string)
+        try: response_json = json.loads(response_raw)
+        except:
+            try: response_json = json.loads(response_raw.split("```json")[1].split("```")[0])
+            except:
+                raise ValueError(response_raw)
+    return response_json
 
 def parse_dimacs(instance_text):
     parsed = []
@@ -65,45 +62,60 @@ def optimal_coloring_number(instance_text):
     graph = grinpy.Graph(parse_dimacs(instance_text))
     return grinpy.chromatic_number(graph)
 
-def check_coloring(model_response, instance_text):
+def missing_vertex(vertex):
+    return f"Vertex {vertex} was not given a value in the coloring."
+def wrong_edge(v1, v2, color):
+    return f"Vertex {v1} and vertex {v2} were both colored {color} despite being connected by an edge."
+def not_optimal(optimal_num):
+    return f"This coloring is not optimal. Only {optimal_num} colors are necessary."
+
+def check_coloring(proposed_coloring, instance_text):
     coloring = {}
-    for line in model_response.split("\n"):
+    for line in proposed_coloring.split("\n"):
         assignment = line.strip().split(": ")
         if len(assignment) < 2: continue #throw out lines that aren't part of the coloring
         vertex_number = assignment[0]
         coloring[vertex_number] = assignment[1]
     # check if coloring is valid
     edges = parse_dimacs(instance_text)
-    wrong_edges = []
+    reasons = []
     for edge in edges:
         if edge[0] not in coloring:
-            return False, [f"Vertex {edge[0]} was not given a value in the coloring."]
+            reasons.append(missing_vertex(edge[0]))
         if edge[1] not in coloring:
-            return False, [f"Vertex {edge[1]} was not given a value in the coloring."]
+            reasons.append(missing_vertex(edge[1]))
         if coloring[edge[0]] == coloring[edge[1]]:
-            wrong_edges.append(f"Vertex {edge[0]} and vertex {edge[1]} were both colored {coloring[edge[0]]} despite being connected by an edge.")
-    if wrong_edges:
-        return False, wrong_edges
+            reasons.append(wrong_edge(edge[0], edge[1], coloring[edge[0]]))
     # check if coloring is optimal
     optimal_num = int(optimal_coloring_number(instance_text))
     if optimal_num == len(set(coloring.values())):
-        return True, []
-    else: 
-        return False, [f"This coloring is not optimal. It uses {len(set(coloring.values()))} colors, when only {int(optimal_coloring_number(instance_text))} are necessary.\n Please recolor."]
-
+        reasons.append(not_optimal(optimal_num))
+    if reasons: return False, reasons
+    else: return True, []
+    
 def evil_check_coloring(model_response, instance_text):
     raise NotImplementedError #Update this
 
+def extract_critique_from_llm_response(response, instance_text):
+    parsed_json = parse_messy_json(response)
+    missing = parsed_json["missing_vertices"]
+    wrong_edges = parsed_json["wrong_edges"]
+    optimal = parsed_json["optimal"]
+    optimal_num = int(optimal_coloring_number(instance_text))
+    reasons = [missing_vertex(m) for m in missing] + [wrong_edge(*triple) for triple in wrong_edges]
+    if not optimal: reasons.append(not_optimal(optimal_num))
+    return reasons
+
 def generate_random_graph(num_nodes, edge_p):
     graph_attempt = grinpy.gnp_random_graph(num_nodes, edge_p)
-    num_tries = 1
+    # num_tries = 1
     # while not grinpy.is_planar(graph_attempt):
     graph_attempt = grinpy.gnp_random_graph(num_nodes, edge_p)
         # if str(num_tries)[2:] == '0'*(len(str(num_tries))-2) :print(f"Try #{num_tries}")
         # num_tries+=1
     return graph_attempt
 
-def generate_graph(instance_text):
+def parse_graph_to_prompt(instance_text):
     prompt = ""
     num_verts = 0
     min_vert = 1
@@ -114,233 +126,104 @@ def generate_graph(instance_text):
     num_verts += (min_vert+1)%2
     return num_verts, prompt
 
-def concat_trace(instance_output, divisor = 1):
-    prompts = instance_output["prompts"]
-    responses = instance_output["responses"]
-    trace = prompts[-divisor] + "\n" + responses[-divisor] +"[ANSWER END]\n"
-    return trace
-
-# def concat_trace_limited(instance_output, divisor = 1, hist_length=1):
-#     prompts = instance_output["prompts"]
-#     responses = instance_output["responses"]
-#     prompts[-1]
-# TODO implement a history backprompt
-
-
-def evaluate_up_to(instance_text, response_trace, responses_correct, problem_type="", backprompt_type=""):
-    evaluation = {}
-    responses = response_trace["responses"]
-    token_cost = sum(map(len, responses))
-    prompts = response_trace["prompts"][:len(responses)] # deals with extra appended (but unsent) prompts
-    token_cost += sum(map(len, prompts))
-    evaluation["token cost"]= token_cost
-    if backprompt_type=="llm": responses = responses[::2]
-    responses_correct = [check_coloring(x, instance_text)[0] for x in responses]
-    evaluation["correct"] = responses_correct[-1]
-    evaluation["ever corrects"] = sum(responses_correct)
-    evaluation["ever correct"] = True in responses_correct
-    if "top" in backprompt_type: evaluation["correct"] = evaluation["ever correct"]
-    evaluation["false negatives"]= sum(responses_correct[:-1])
-    evaluation["num prompts"] = len(prompts)
-    self_con = max(set(responses), key = responses.count)
-    responses = list(map(lambda x: x.replace(" ",""), responses))
-    evaluation["num unique responses"] = len(set(responses))
-    evaluation["self consistency"]=check_coloring(self_con, instance_text)[0]
-    evaluation["stopped"]=response_trace["stopped"]
-    evaluation["stopped correctly"]=response_trace["stopped"] and evaluation["correct"]
-    return evaluation
-
 #### Required Functions
 
 def file_ending():
     return ".col"
 
-def generate(instance_text, problem_type):
+def generate(instance_text):
     prompt = DEFAULT_PROMPT_START
     prompt += f"You may use at most {optimal_coloring_number(instance_text)} colors.\n"
-    num_verts, graph_text = generate_graph(instance_text)
+    num_verts, graph_text = parse_graph_to_prompt(instance_text)
     prompt += graph_text
     prompt+=f"There are a total of {num_verts} vertices. Please label every vertex, even if it is disconnected from the rest of the graph."
     prompt += DEFAULT_PROMPT_END
     return prompt
 
-
-def evaluate(instance_text, response_trace, problem_type="", backprompt_type=""):
+def evaluate(instance):
     evaluation = []
-    subtrace = dict(response_trace)
-    responses_correct_all = [check_coloring(x,instance_text)[0] for x in subtrace["responses"]]
-    for n in range(1, len(response_trace["responses"])+1):
-        subtrace["responses"] = response_trace["responses"][:n]
-        responses_correct = responses_correct_all[:n]
-        evaluation.append(evaluate_up_to(instance_text, subtrace, responses_correct, problem_type, backprompt_type))
-    if "llm" in backprompt_type and STOP_PHRASE in response_trace["responses"][-1]:
-        evaluation = list(evaluation[:-1])
+    backprompt_type = instance[-1]["backprompt_type"]
+    instance_text = get_instance_text(instance[-1]["problem_id"])
+    critiques = []
+    if "llm" in backprompt_type:
+        generations = instance[::2]
+        generations[-1]['stopped'] = instance[-1]['stopped']
+        if backprompt_type != "sound+llm": critiques = instance[1::2]
+    else:
+        generations = instance
+    for response in generations:
+        correct = check_coloring(response["response"], instance_text)[0]
+        verification_claim = response['stopped']
+        if backprompt_type == "top":
+            verification_claim = correct
+        evaluation.append({"correct": correct, "verification_claim": verification_claim})
+        if backprompt_type == "top" and verification_claim: break
     return evaluation
 
 def get_instance_text(problem_id):
     with open(f"{GRAPH_COLORING_DIRECTORY}instance-{problem_id}.col","r") as fp:
         return fp.read()
 
-def convert_instance_to_old_format(instance):
+def generate_verification_prompt(instance):
     instance_text = get_instance_text(instance[-1]["problem_id"])
-    instance_output = {"prompts":[instance[x]["prompt"] for x in range(0,len(instance))], "responses":[instance[x]["response"] for x in range(0,len(instance))]}
-    backprompt_type = instance[-1]["backprompt_type"]
-    return instance_text, instance_output, backprompt_type
+    response = instance[-1]["response"]
+    # Return checking prompt for odd numbered responses
+    backprompt_query = '[Instructions]\nWhen outputting your final answer, first print the [Answer] tag, then put your final answer after the [Answer] tag. Respond only with a json dictionary in the following format:\n'+\
+        '{"wrong_edges": [a list of triples: [v1, v2, c] where v1 and v2 are connected and both colored c],'+\
+        '"missing_vertices": [a list of vertices that were not colored],'+\
+        '"optimal": boolean representing if the number of colors used is less than the given optimal number,'+\
+        '"correct": boolean representing overall correctness}'+\
+        '\nEnsure that the dictionary contains all four keys, even if some are empty. Ensure that the python json library can parse the dictionary.\n'
+    backprompt_query+= f"[QUERY]\nThe following graph, described as a set of edges, has an optimal coloring number of {optimal_coloring_number(instance_text)}:\n"
+    _, graph_text = parse_graph_to_prompt(instance_text)
+    backprompt_query+= graph_text
+    backprompt_query+= f"Please check if this coloring is correct:" +response
+    backprompt_query+= f"\nIf it is, say '{STOP_PHRASE}' Do not provide anything else in your response. If it is incorrect, please point out which same-color vertices share an edge."
+    return backprompt_query
+
+def sound_verify(instance):
+    return check_coloring(instance[-1]["response"][-1], get_instance_text(instance[-1]["problem_id"]))[0]
+
+def wrap_in_messages(s):
+    return [{'role':'user', 'content':s}]
 
 def backprompt(instance):
-    instance_text, instance_output, backprompt_type = convert_instance_to_old_format(instance)
-    model_response = instance_output["responses"][-1]
-    if backprompt_type=="llm-cot":
-        if len(instance_output["responses"])%2==0:
-            # Return generation prompt for even numbered responses, but first check for the stop phrase
-            if parse_messy_json(model_response)['correct']:
-                return "stop10002"
-            backprompt = concat_trace(instance_output, divisor=2)
-            backprompt += "This is incorrect. Feedback:\n"
-            backprompt += model_response
-            backprompt += f"\n\nUsing this feedback, please try again. {DEFAULT_PROMPT_END}"
-            return backprompt       
-        else:
-            return generate_cot_prompt(instance_text, model_response)
-    if backprompt_type=="llm":
-        #free form feedback from the llm
-        if len(instance_output["responses"])%2==0:
-            # Return generation prompt for even numbered responses, but first check for the stop phrase
-            if STOP_PHRASE in model_response:
-                return "stop10002"
-            backprompt = concat_trace(instance_output, divisor=2)
-            backprompt += "This is incorrect. Feedback:\n"
-            backprompt += model_response
-            backprompt += f"\n\nUsing this feedback, please try again. {DEFAULT_PROMPT_END}"
-            return backprompt       
-        else:
-            # Return checking prompt for odd numbered responses
-            backprompt_query = f"The following graph, described as a set of edges, has an optimal coloring number of {optimal_coloring_number(instance_text)}:\n"
-            num_verts, graph_text = generate_graph(instance_text)
-            backprompt_query+= graph_text
-            backprompt_query+= f"Please check if this coloring is correct:" +model_response
-            backprompt_query+= f"\nIf it is, say '{STOP_PHRASE}' Do not provide anything else in your response. If it is incorrect, please point out which same-color vertices share an edge."
-            return backprompt_query
-    if backprompt_type=="llm-passfail":
-        #free form feedback from the llm
-        if len(instance_output["responses"])%2==0:
-            # Return generation prompt for even numbered responses, but first check for the stop phrase
-            if STOP_PHRASE in model_response:
-                return "stop10002"
-            return f"{concat_trace(instance_output)}Feedback: This is not correct. Using the previously provided graph, please provide a correct coloring. {DEFAULT_PROMPT_END}"       
-        else:
-            # Return checking prompt for odd numbered responses
-            backprompt_query = f"The following graph, described as a set of edges, has an optimal coloring number of {optimal_coloring_number(instance_text)}:\n"
-            num_verts, graph_text = generate_graph(instance_text)
-            backprompt_query+= graph_text
-            backprompt_query+= f"Please check if this coloring is correct:" +model_response
-            backprompt_query+= f"\nIf it is, say '{STOP_PHRASE}' Do not provide anything else in your response. If it is incorrect, please point out which same-color vertices share an edge."
-            return backprompt_query
-    if backprompt_type=="llm-sample":
-        if len(instance_output["responses"])%2==0:
-            # Return generation prompt for even numbered responses, but first check for the stop phrase
-            if STOP_PHRASE in model_response:
-                return "stop10002"
-            return instance_output["prompts"][0]
-        else:
-            # Return checking prompt for odd numbered responses
-            backprompt_query = f"The following graph, described as a set of edges, has an optimal coloring number of {optimal_coloring_number(instance_text)}:\n"
-            num_verts, graph_text = generate_graph(instance_text)
-            backprompt_query+= graph_text
-            backprompt_query+= f"Please check if this coloring is correct:" +model_response
-            backprompt_query+= f"\nIf it is, say '{STOP_PHRASE}' Do not provide anything else in your response. If it is incorrect, please point out which same-color vertices share an edge."
-            return backprompt_query
-    #TODO implement a limited history version
-    # if backprompt_type=="llm-one-hist":
-    #     if len(instance_output["responses"])%2==0:
-    #         # Return generation prompt for even numbered responses, but first check for the stop phrase
-    #         if STOP_PHRASE in model_response:
-    #             return "stop10002"
-    #         backprompt = concat_trace(instance_output, divisor=2)
-    #         backprompt += "This is incorrect. Feedback:\n"
-    #         backprompt += model_response
-    #         backprompt += f"\n\nUsing this feedback, please try again. {DEFAULT_PROMPT_END}"
-    #         return backprompt       
-    #     else:
-    #         # Return checking prompt for odd numbered responses
-    #         backprompt_query = f"The following graph, described as a set of edges, has an optimal coloring number of {optimal_coloring_number(instance_text)}:\n"
-    #         num_verts, graph_text = generate_graph(instance_text)
-    #         backprompt_query+= graph_text
-    #         backprompt_query+= f"Please check if this coloring is correct:" +model_response
-    #         backprompt_query+= f"\nIf it is, say '{STOP_PHRASE}' Do not provide anything else in your response. If it is incorrect, please point out which same-color vertices share an edge."
-    #         return backprompt_query
-        
-
-    # if backprompt_type == "llm-query":
-    #     
-    # elif backprompt_type == "llm-wrapper":
-    #     backprompt = "This is incorrect. Feedback:\n"
-    #     backprompt += model_response
-    #     backprompt += "\n\nUsing this feedback, please try again. " +DEFAULT_PROMPT_END
-    #     return backprompt
-    # if backprompt_type == "zero":
-    #     return f"This coloring may or may not be correct. If it is correct, please repeat it. Do not provide anything else in your response. If it is not correct, provide a correct coloring. {DEFAULT_PROMPT_END}"
-    if backprompt_type == "top":
-        # Just do the same initial prompt every time. aka best of n
-        return instance_output["prompts"][0]
-    if backprompt_type == "think":
-        return instance_output["prompts"][0]+"\n Let's think step by step."
-    check, reasons = check_coloring(model_response, instance_text)
-    if backprompt_type == "llm+full":
-        #LLM verifies, sound critique provides full feedback
-        if len(instance_output["responses"])%2==0:
-            # Return generation prompt for even numbered responses, but first check for the stop phrase
-            if STOP_PHRASE in model_response:
-                return "stop10002"
-            backprompt = concat_trace(instance_output, divisor=2)
-            backprompt += "This is incorrect. Feedback:\n"
-            backprompt += " ".join(reasons)
-            backprompt += f"\n\nThis is wrong. Please recolor. {DEFAULT_PROMPT_END}"
-            return backprompt       
-        else:
-            # Return checking prompt for odd numbered responses
-            backprompt_query = f"The following graph, described as a set of edges, has an optimal coloring number of {optimal_coloring_number(instance_text)}:\n"
-            num_verts, graph_text = generate_graph(instance_text)
-            backprompt_query+= graph_text
-            backprompt_query+= f"Please check if this coloring is correct:" +model_response
-            backprompt_query+= f"\nIf it is, say '{STOP_PHRASE}' Do not provide anything else in your response. If it is incorrect, please point out which same-color vertices share an edge."
-            return backprompt_query
-    if check: return "stop10002"
-    elif backprompt_type == "sound+llm":
-        # Sound verifier with LLM feedback
-        if len(instance_output["responses"])%2==0:
-            backprompt = concat_trace(instance_output, divisor=2)
-            backprompt += "This is incorrect. Feedback:\n"
-            backprompt += model_response
-            backprompt += f"\n\nThis is wrong. Please recolor. {DEFAULT_PROMPT_END}"
-            return backprompt       
-        else:
-            # Return checking prompt for odd numbered responses
-            backprompt_query = f"The following graph, described as a set of edges, has an optimal coloring number of {optimal_coloring_number(instance_text)}:\n"
-            num_verts, graph_text = generate_graph(instance_text)
-            backprompt_query+= graph_text
-            backprompt_query+= f"Please check if this coloring is correct:" +model_response
-            backprompt_query+= f"\nIf it is, say '{STOP_PHRASE}' Do not provide anything else in your response. If it is incorrect, please point out which same-color vertices share an edge."
-            return backprompt_query
-    elif backprompt_type == "top-stop": return instance_output["prompts"][0]
-    elif backprompt_type == "passfail": return f"{concat_trace(instance_output)}Feedback: This is not correct. Using the previously provided graph, please provide a correct coloring. {DEFAULT_PROMPT_END}"
-    elif backprompt_type == "first": return f"{concat_trace(instance_output)}Feedback: {reasons[0]}\nThis is wrong. Please recolor. {DEFAULT_PROMPT_END}"
-    elif backprompt_type == "full": return f"{concat_trace(instance_output)}Feedback: "+" ".join(reasons)+f"\nThis is wrong. Please recolor. {DEFAULT_PROMPT_END}"
-    elif backprompt_type == "evil":
-        raise NotImplementedError
-        check = evil_check_coloring(model_response, instance_text)
-        if not check:
-            return STOP_PHRASE
-        else:
-            if check is str:
-                return check
-            else:
-                correct_edges, coloring = check
-                edge_num = random.randrange(0, len(correct_edges))
-                return f"Vertex {correct_edges[edge_num][0]} and vertex {correct_edges[edge_num][1]} were both colored {coloring[correct_edges[edge_num][0]]} despite being connected by an edge.\nThis is wrong. Please recolor. {DEFAULT_PROMPT_END}"
- 
-    else: raise NotImplementedError
-
+    backprompt_type = instance[-1]["backprompt_type"]
+    verifier = backprompt_type["verifier"]
+    critiquer = backprompt_type["critiquer"]
+    critique_type = backprompt_type["critique_type"]
+    history_len = backprompt_type["history_len"]
+    history_type = backprompt_type["history_type"]
+    # check if llm prompting, if so, check which portion we're in (generation or verification/critique)
+    jump = 1
+    if (verifier == "llm" or critiquer == "llm"):
+        if len(instance)%2: return wrap_in_messages(generate_verification_prompt(instance))
+        jump = 2
+    # check verification and stop if it says to
+    if verifier == "sound" and sound_verify(instance): return wrap_in_messages("stop10002")
+    elif verifier == "llm" and parse_messy_json(instance[-1]["response"])["correct"]: return wrap_in_messages("stop10002")
+    # check if 0 history length
+    if history_len == 0: return wrap_in_messages(instance[0]["prompt"])
+    # then generate critique
+    if critiquer == "llm":
+        reasons = extract_critique_from_llm_response(instance[-1]["response"], get_instance_text(instance[-1]["problem_id"]))
+    elif critiquer == "sound":
+        _, reasons = check_coloring(instance[-1]["response"], get_instance_text(instance[-1]["problem_id"]))
+    else: raise NotImplementedError()
+    # and put it together, with amount of detail specified
+    if critique_type == "full":
+        critique = "\n".join(reasons)
+    elif critique_type == "first":
+        critique = reasons[0]
+    else: raise NotImplementedError()
+    new_portion = [{'role':'assistant', 'content':instance[-jump]["response"]}] + wrap_in_messages(f"This is incorrect. Feedback:\n{critique}\n\nUsing this feedback, please try again. {DEFAULT_PROMPT_END}")
+    # then concatenate history properly
+    initial_prompt = [instance[0]["prompt"][0]]
+    if history_type == "full":
+        if history_len == 1: backprompt = initial_prompt + new_portion
+        else: backprompt = initial_prompt + instance[-jump]["prompt"][1:][-jump*(history_len-1):] + new_portion
+    else: raise NotImplementedError()
+    return backprompt
 
 # generate function
 def generate_instances(start, end, total_nodes): #TODO make this num instead
@@ -351,7 +234,6 @@ def generate_instances(start, end, total_nodes): #TODO make this num instead
         dimacs = construct_dimacs(graph)
         dimacs += f"\nc {CHROMATIC_NUMBER_KEY}{optimal_coloring_number(dimacs)}"
         instances[x] = dimacs
-
 
 #### Precompute and instance generation scripts
 # WARNING: Only works from domain_utils directory
