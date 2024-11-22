@@ -24,8 +24,9 @@ def check_answer(instance_text, equation):
     expression = fix_expression(expression)
     try: return sympy.simplify(expression) == 24, f"This expression evaluates to {sympy.simplify(expression)} instead of 24."
     except: return False, "This expression is malformed." #NOTE: this will reject expressions that could be fixed by just appending a close parens
-    
+
 def concat_trace(instance_output, divisor = 1):
+    raiseNotImplementedError("FIX MEEEEE")
     prompts = instance_output["prompts"]
     responses = instance_output["responses"]
     trace = prompts[-divisor] + responses[-divisor] +"[ANSWER END]\n"
@@ -43,7 +44,7 @@ def list_previous(instance_output, evaluate=False):
         prev_list+="\n"
     return prev_list
 
-def fix_expression(expression): # hand-crafted fixes for rare LLM outputs that don't play nice with sympy 
+def fix_expression(expression): # hand-crafted fixes for rare LLM outputs that don't play nice with sympy
     expression = expression.replace("x","*")
     expression = expression.replace("÷","/")
     expression = expression.replace("×","*")
@@ -68,11 +69,11 @@ def evaluate_up_to(instance_text, response_trace, responses_correct, responses_e
     prompts = response_trace["prompts"][:len(responses)] # deals with extra appended (but unsent) prompts
     token_cost += sum(map(len, prompts))
     evaluation["token cost"]= token_cost
-    
+
     # print(responses)
     # if len(responses)>1: exit()
-    
-    if "llm" in backprompt_type: 
+
+    if "llm" in backprompt_type:
         evals = responses[1::2]
         responses = responses[::2]
     evaluation["correct"] = responses_correct[-1]
@@ -80,7 +81,7 @@ def evaluate_up_to(instance_text, response_trace, responses_correct, responses_e
     evaluation["ever corrects"] = sum(responses_correct)
     evaluation["ever correct"] = True in responses_correct
     evaluation['false_positive'] = False
-    if "llm" in backprompt_type and len(evals)==len(responses): 
+    if "llm" in backprompt_type and len(evals)==len(responses):
         try:
             json_string = re.search("{([^}]*)}",evals[-1]).group(0).lower()
             claim = json.loads(json_string)['correct']
@@ -139,9 +140,17 @@ def convert_instance_to_old_format(instance):
     instance_text = get_instance_text(instance[-1]["problem_id"])
     instance_output = {"prompts":[instance[x]["prompt"] for x in range(0,len(instance))], "responses":[instance[x]["response"] for x in range(0,len(instance))]}
     backprompt_type = instance[-1]["backprompt_type"]
-    return instance_text, instance_output, backprompt_type
+    verifier = backprompt_type["verifier"]
+    critiquer = backprompt_type["critiquer"]
+    critique_type = backprompt_type["critique_type"]
+    history_len = backprompt_type["history_len"]
+    history_type = backprompt_type["history_type"]
+    if verifier == "llm" and critiquer == "llm":
+        backprompt_name = "llm"
+    else: raiseNotImplementedError()
+    return instance_text, instance_output, backprompt_name
 
-def backprompt(instance):
+def backprompt_old(instance):
     instance_text, instance_output, backprompt_type = convert_instance_to_old_format(instance)
     model_response = instance_output["responses"][-1]
     if backprompt_type == "llm":
@@ -149,7 +158,7 @@ def backprompt(instance):
         if len(instance_output["responses"])%2==0:
             # Return generation prompt for even numbered responses, but first check for the stop phrase
             llm_json = {}
-            try: 
+            try:
                 json_string = re.search("{([^}]*)}",model_response).group(0).lower()
                 llm_json = json.loads(json_string)
             except:
@@ -157,10 +166,9 @@ def backprompt(instance):
                 llm_json["feedback"] = model_response
             if llm_json["correct"]:
                 return STOP_PHRASE
-            backprompt = concat_trace(instance_output, divisor=2)
-            backprompt += "Feedback: This is not correct.\n"
+            backprompt = "Feedback: This is not correct.\n"
             backprompt += llm_json["feedback"]
-            backprompt += f"\n\nWith this feedback, please try again. {DEFAULT_BACKPROMPT_END(instance_text)}"
+            backprompt += f"\n\nWith this feedback, please try again."
             return backprompt
         else:
             # Return checking prompt for odd numbered responses
@@ -174,7 +182,7 @@ def backprompt(instance):
         if len(instance_output["responses"])%2==0:
             # Return generation prompt for even numbered responses, but first check for the stop phrase
             llm_json = {}
-            try: 
+            try:
                 json_string = re.search("{([^}]*)}",model_response).group(0).lower()
                 llm_json = json.loads(json_string)
             except:
@@ -184,8 +192,7 @@ def backprompt(instance):
             # llm_json = json.loads(json_string)
             if llm_json["correct"]:
                 return STOP_PHRASE
-            backprompt = concat_trace(instance_output, divisor=2)
-            backprompt += "Feedback: This is not correct.\n"
+            backprompt = "Feedback: This is not correct.\n"
             backprompt += llm_json["feedback"]
             backprompt += f"\n\nWith this feedback, please try again. {DEFAULT_BACKPROMPT_END(instance_text)}"
             return backprompt
@@ -284,7 +291,7 @@ def backprompt(instance):
         if len(instance_output["responses"])%2==0:
         # Return generation prompt for even numbered responses, but first check for the stop phrase
             llm_json = {}
-            try: 
+            try:
                 json_string = re.search("{([^}]*)}",model_response).group(0).lower()
                 llm_json = json.loads(json_string)
             except:
@@ -292,7 +299,7 @@ def backprompt(instance):
                 llm_json["feedback"] = model_response
             if llm_json["correct"]:
                 return STOP_PHRASE
-            
+
             backprompt = concat_trace(instance_output, divisor=2)
             backprompt += "Feedback: This is not correct.\n"
             backprompt += reason if check else ""
@@ -312,7 +319,7 @@ def backprompt(instance):
         if len(instance_output["responses"])%2==0:
         # Return generation prompt for even numbered responses, but first check for the stop phrase
             llm_json = {}
-            try: 
+            try:
                 json_string = re.search("{([^}]*)}",model_response).group(0).lower()
                 llm_json = json.loads(json_string)
             except:
@@ -320,7 +327,7 @@ def backprompt(instance):
                 llm_json["feedback"] = model_response
             if llm_json["correct"]:
                 return STOP_PHRASE
-            
+
             backprompt = concat_trace(instance_output, divisor=2)
             backprompt += "Feedback: This is not correct.\n"
             backprompt += llm_json['feedback'] if llm_json['correct'] else ""
@@ -355,6 +362,33 @@ def backprompt(instance):
         backprompt+= "\nAnswer: "
         return backprompt
     else: raise NotImplementedError
+
+
+def backprompt(instance):
+    backprompt_type = instance[-1]["backprompt_type"]
+    verifier = backprompt_type["verifier"]
+    critiquer = backprompt_type["critiquer"]
+    critique_type = backprompt_type["critique_type"]
+    history_len = backprompt_type["history_len"]
+    history_type = backprompt_type["history_type"]
+    # check if llm prompting, if so, check which portion we're in (generation or verification/critique)
+    text = backprompt_old(instance)
+    jump = 1
+    if (verifier == "llm" or critiquer == "llm"):
+        if len(instance)%2: return wrap_in_messages(text)
+        jump = 2
+    new_portion = [{'role':'assistant', 'content':instance[-jump]["response"]}] + wrap_in_messages(f"This is incorrect. {text}\n{DEFAULT_BACKPROMPT_END(instance[-1]['prompt'][0])}")
+    # then concatenate history properly
+    initial_prompt = [instance[0]["prompt"][0]]
+    if history_type == "full":
+        if history_len == 1: backprompt = initial_prompt + new_portion
+        else: backprompt = initial_prompt + instance[-jump]["prompt"][1:][-jump*(history_len-1):] + new_portion
+    else: raise NotImplementedError()
+    return backprompt
+
+
+def wrap_in_messages(s):
+    return [{'role':'user', 'content':s}]
 
 #### Instance conversion script
 

@@ -3,11 +3,12 @@ from openai import OpenAI
 from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
 import domain_utils
 import utils
-from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn, TimeRemainingColumn
+from rich.progress import (Progress, SpinnerColumn, TextColumn, BarColumn,
+                           TaskProgressColumn, TimeRemainingColumn)
 import time
 import json
 
-MAX_GPT_RESPONSE_LENGTH = 10000
+MAX_GPT_RESPONSE_LENGTH = 1500
 MAX_GPT_RESPONSE_LENGTH_SAFE = 300 #something to restrict output to if everything gets too long
 MAX_BACKPROMPT_LENGTH = 15
 STOP_PHRASE = "stop10002" # "Verifier confirmed success" # what the verifier has to say
@@ -15,24 +16,30 @@ STOP_STATEMENT = "[ANSWER END]" # what we look for to end LLM response generatio
 MAX_WORKERS = 1000
 
 def prepare_input(prompts, previous_output, llm, backprompt_type, temp, trial_id, num_iterations):
-    #TODO refactor
     input = []
+    furthest = {x:-1 for x in prompts.keys()}
+    full_key_output = {x:[] for x in prompts.keys()}
+    blacklist = []
+    for line in previous_output:
+        id = line["problem_id"]
+        if id in blacklist or id not in prompts.keys():
+            continue
+        prompt_num = line["prompt_num"]
+        if prompt_num +1 >= num_iterations or line["stopped"]:
+            if utils.check_spec(line, id, llm, backprompt_type, temp, trial_id):
+                blacklist.append(id)
+            continue
+        if utils.check_spec(line, id, llm, backprompt_type, temp, trial_id):
+            full_key_output[id].append(line)
+            if prompt_num > furthest[id]:
+                furthest[id] = prompt_num
     for key in prompts.keys():
-        furthest = -1
-        full_key_output = []
-        for line in previous_output:
-            if utils.check_spec(line, key, llm, backprompt_type, temp, trial_id):
-                full_key_output.append(line)
-                if line["prompt_num"] > furthest:
-                    furthest = line["prompt_num"]
-                    furthest_stopped = line["stopped"]
-                    if furthest +1 >= num_iterations: break
-                if line["stopped"]: break
-        if furthest == -1:
+        if key in blacklist: continue
+        if furthest[key] == -1:
             input.append([{"problem_id":key, "trial_num":trial_id, "llm":llm, "backprompt_type":backprompt_type, "temp":temp, "prompt_num":0, "prompt":[{"role":"user", "content": prompts[key]}], "response":"", "converted_data":False, "stopped":False}])
-        elif not furthest_stopped and furthest+1 < num_iterations:
-            full_key_output = sorted(full_key_output, key=lambda x: x["prompt_num"])
-            input.append(full_key_output)
+        else:
+            full_key_output[key] = sorted(full_key_output[key], key=lambda x: x["prompt_num"])
+            input.append(full_key_output[key])
     return input
 
 def process_instance(instance, domain_name, verbose=False):
@@ -40,21 +47,21 @@ def process_instance(instance, domain_name, verbose=False):
     # Note that we assume that instance is already sorted by prompt_num
     # and that it isn't stopped, nor has it reached the maximum number of iterations
     if not instance[-1]["response"]:
-        # if verbose: print(f">>Instance {instance[-1]['problem_id']} has never been seen before.==")
+        if verbose: print(f">>Instance {instance[-1]['problem_id']} has never been seen before.==")
         prompt = instance[-1]["prompt"]
     else:
-        # if verbose: print(f">>Generating backprompt {instance[-1]['prompt_num']+1} for instance {instance[-1]['problem_id']}.==")
+        if verbose: print(f">>Generating backprompt {instance[-1]['prompt_num']+1} for instance {instance[-1]['problem_id']}.==")
         prompt = dmn.backprompt(instance)
         if check_backprompt(prompt): #TODO get rid of this part
             instance[-1]["stopped"] = True
             return instance
     llm = instance[-1]["llm"]
     temp = instance[-1]["temp"]
-    # if verbose: print(f">>Instance {instance[-1]['problem_id']} is being processed with prompt:\n{prompt}")
+    if verbose: print(f">>Instance {instance[-1]['problem_id']} is being processed with prompt:\n{prompt}")
     response, response_dict = send_query(prompt, llm, temp=temp)
     if not response: return None
     response_text = response.choices[0].message.content
-    # if verbose: print(f">>Response to instance {instance[-1]['problem_id']}:\n{response_text}")
+    if verbose: print(f">>Response to instance {instance[-1]['problem_id']}:\n{response_text}")
     if not instance[-1]["response"]:
         instance[-1]["response"] = response_text
         instance[-1]["response_object"] = response_dict
@@ -68,11 +75,13 @@ def process_instance(instance, domain_name, verbose=False):
 def check_backprompt(backprompt):
     return STOP_PHRASE.lower() in backprompt[-1]['content'].lower()
 
-def send_query(prompt, llm, max_tokens=MAX_GPT_RESPONSE_LENGTH, temp=1):
+def send_query(prompt, llm, temp=1):
     try:
         client = OpenAI()
         start = time.time()
-        response = client.chat.completions.create(model=llm, messages=prompt, temperature=temp, stop="[ANSWER END]", max_tokens=max_tokens)
+        if "o1" in llm:
+            response = client.chat.completions.create(model=llm, messages=prompt)
+        else: response = client.chat.completions.create(model=llm, messages=prompt, temperature=temp, stop="[ANSWER END]")
         end = time.time()
     except Exception as e:
         print("[-]: Failed OpenAI query execution: {}".format(e))
@@ -80,14 +89,21 @@ def send_query(prompt, llm, max_tokens=MAX_GPT_RESPONSE_LENGTH, temp=1):
     response_dict = {**json.loads(response.model_dump_json()), "time": end-start}
     return response, response_dict
 
-def get_responses(llm, domain_name, start=0, end=0, overwrite_previous=False, verbose=False, generator = "llm", verifier = "sound", critiquer = "", critique_type = "full", history_len = 15, history_type = "full", num_iterations=15, temp=1, trial_id=0, max_cost=100):
+def get_responses(llm, domain_name, start=0, end=0, overwrite_previous=False, verbose=False, generator = "llm", verifier = "sound", critiquer = "", critique_type = "full", history_len = 15, history_type = "full", num_iterations=15, temp=1, trial_id=0, max_cost=100, problem_type = ""):
     if history_len == 0: critiquer = ""
     backprompt_type = {"generator":generator, "verifier":verifier, "critiquer":critiquer, "critique_type":critique_type, "history_len":history_len, "history_type":history_type}
     if not utils.known_llm(llm): return
     prompts = utils.read_json(domain_name, overwrite_previous=False, data_type="prompts")
 
     # Constrain work to only specified instances if flagged to do so
-    if end > start: prompts = {str(x) : prompts[str(x)] for x in range(start, end+1)}
+    if "ALL" in problem_type:
+        pprompts = {}
+        p_key = problem_type.split("ALL")[1]
+        for p_type in ["correct", "ablated", "non-optimal", "random"]:
+            pprompts.update({f"{x}{p_type}{p_key}" : prompts[f"{x}{p_type}{p_key}"] for x in range(start, end+1)})
+        prompts = pprompts
+    elif problem_type: prompts = {f"{x}{problem_type}" : prompts[f"{x}{problem_type}"] for x in range(start, end+1)}
+    elif end > start: prompts = {str(x) : prompts[str(x)] for x in range(start, end+1)}
     print(f">>Checking {len(prompts)} instances for work to be done.")
 
     # DEPRECATED:
@@ -122,7 +138,7 @@ def get_responses(llm, domain_name, start=0, end=0, overwrite_previous=False, ve
                 for future in done:
                     futures.remove(future)
                     new_instance = future.result()
-                    if not new_instance: 
+                    if not new_instance:
                         failed += 1
                         continue
                     else:
